@@ -18,6 +18,22 @@ def init_db():
     conn.commit()
     conn.close()
 
+def save_telemetry(data):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO telemetry (timestamp, station_id, score, status, crowd_count)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (
+        data.get("timestamp"),
+        data.get("station_id"),
+        data.get("score"),
+        data.get("status"),
+        data.get("crowd_count")
+    ))
+    conn.commit()
+    conn.close()
+
 def get_recent_telemetry(limit: int = 10):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
