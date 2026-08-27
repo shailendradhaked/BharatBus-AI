@@ -13,23 +13,49 @@ export default function App() {
     fleet_dispatches: 3
   });
 
-  // Simulated live telemetry fetch
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      const timeStr = now.toTimeString().split(' ')[0];
-      
-      const newPoint = {
-        time: timeStr,
-        crowd: Math.floor(Math.random() * 150) + 100,
-        bharatScore: Math.floor(Math.random() * 30) + 50
-      };
+  // Modal / Notification State for Passenger Actions
+  const [notification, setNotification] = useState(null);
 
-      setAnalyticsData(prev => [...prev.slice(-10), newPoint]);
-    }, 3000);
+  // Fetch Real Data from Backend (FastAPI telemetry or simulated live updates)
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Agar aapka backend localhost:8000 par chal raha hai toh yahan real API call kar sakte hain:
+        // const response = await fetch('http://localhost:8000/analytics');
+        // const data = await response.json();
+        
+        // Current simulated live update with real dynamic timestamps
+        const now = new Date();
+        const timeStr = now.toTimeString().split(' ')[0];
+        
+        const newPoint = {
+          time: timeStr,
+          crowd: Math.floor(Math.random() * 100) + 1100,
+          bharatScore: Number((Math.random() * 10 + 55).toFixed(1))
+        };
+
+        setAnalyticsData(prev => [...prev.slice(-9), newPoint]);
+      } catch (error) {
+        console.error("Error fetching live data:", error);
+      }
+    };
+
+    fetchData(); // Initial call
+    const timer = setInterval(fetchData, 4000); // Poll every 4 seconds
 
     return () => clearInterval(timer);
   }, []);
+
+  // Handle Interactive Passenger Actions
+  const handleBookTicket = () => {
+    setNotification("🎫 Redirecting to secure UPI Payment Gateway (₹30 ticket booked successfully for Bus #DL-01-AI-4029)...");
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const handleSosEmergency = () => {
+    setNotification("🚨 SOS Alert Dispatched to Central Command & Nearest Traffic Control Unit! Help is on the way.");
+    setTimeout(() => setNotification(null), 5000);
+  };
 
   return (
     <div style={{ backgroundColor: '#0b0f19', color: '#f3f4f6', minHeight: '100vh', padding: '20px', fontFamily: 'Inter, sans-serif' }}>
@@ -47,7 +73,7 @@ export default function App() {
             style={{
               padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer',
               backgroundColor: viewMode === 'admin' ? '#0284c7' : '#1f2937',
-              color: '#fff', border: 'none'
+              color: '#fff', border: 'none', transition: '0.2s'
             }}
           >
             🛡️ Admin Command Center
@@ -57,13 +83,20 @@ export default function App() {
             style={{
               padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer',
               backgroundColor: viewMode === 'passenger' ? '#10b981' : '#1f2937',
-              color: '#fff', border: 'none'
+              color: '#fff', border: 'none', transition: '0.2s'
             }}
           >
             📱 Passenger QR View
           </button>
         </div>
       </div>
+
+      {/* Interactive Global Alert / Notification Banner */}
+      {notification && (
+        <div style={{ backgroundColor: '#1e3a8a', border: '1px solid #3b82f6', color: '#bfdbfe', padding: '12px 20px', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold', textAlign: 'center', animation: 'fadeIn 0.3s' }}>
+          {notification}
+        </div>
+      )}
 
       {/* Conditional Rendering based on View Mode */}
       {viewMode === 'admin' ? (
@@ -90,7 +123,7 @@ export default function App() {
 
           {/* Recharts Analytics Section */}
           <div style={{ backgroundColor: '#111827', padding: '20px', borderRadius: '8px' }}>
-            <h3 style={{ fontSize: '16px', marginBottom: '15px', color: '#e5e7eb' }}>📈 Real-Time Crowd Density vs Bharat Score Analytics</h3>
+            <h3 style={{ fontSize: '16px', marginBottom: '15px', color: '#e5e7eb' }}>📈 Real-Time Crowd Density vs Bharat Score Analytics (Live Telemetry)</h3>
             <div style={{ width: '100%', height: '300px' }}>
               <ResponsiveContainer>
                 <BarChart data={analyticsData}>
@@ -107,8 +140,8 @@ export default function App() {
           </div>
         </div>
       ) : (
-        /* Passenger QR Portal View */
-        <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: '#111827', padding: '25px', borderRadius: '12px', border: '1px solid #374151' }}>
+        /* Passenger QR Portal View (Fully Clickable) */
+        <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: '#111827', padding: '25px', borderRadius: '12px', border: '1px solid #374151', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
           <div style={{ textAlign: 'center', marginBottom: '20px' }}>
             <span style={{ backgroundColor: '#065f46', color: '#34d399', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>LIVE BUS #DL-01-AI-4029</span>
             <h2 style={{ fontSize: '22px', margin: '10px 0 5px 0' }}>Route: Kashmere Gate ➔ Anand Vihar</h2>
@@ -127,12 +160,22 @@ export default function App() {
           </div>
 
           <div style={{ backgroundColor: '#1f2937', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
-            <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#38bdf8' }}>🎫 AI Quick Services</h4>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#38bdf8' }}>🎫 AI Quick Services (Interactive)</h4>
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button style={{ flex: 1, backgroundColor: '#0284c7', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+              <button 
+                onClick={handleBookTicket}
+                style={{ flex: 1, backgroundColor: '#0284c7', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#0369a1'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#0284c7'}
+              >
                 Book Ticket (UPI)
               </button>
-              <button style={{ flex: 1, backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+              <button 
+                onClick={handleSosEmergency}
+                style={{ flex: 1, backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '12px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', transition: '0.2s' }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#b91c1c'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#dc2626'}
+              >
                 SOS Emergency
               </button>
             </div>
