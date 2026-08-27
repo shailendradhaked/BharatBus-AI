@@ -4,7 +4,6 @@ from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from database import init_db, get_recent_telemetry, save_telemetry
 
 app = FastAPI(title="BharatBus-AI Core Engine")
 
@@ -24,6 +23,9 @@ STATIONS = [
     "UDAIPUR-CITY-HUB"
 ]
 
+# Global in-memory data store
+TELEMETRY_LOGS = []
+
 class TelemetryPayload(BaseModel):
     station_id: str
     water_level: float
@@ -32,6 +34,7 @@ class TelemetryPayload(BaseModel):
     temperature: float
 
 def generate_random_telemetry():
+    global TELEMETRY_LOGS
     station_id = random.choice(STATIONS)
     water_level = round(random.uniform(10.0, 100.0), 2)
     cleanliness_score = round(random.uniform(20.0, 100.0), 2)
@@ -48,7 +51,11 @@ def generate_random_telemetry():
         "status": status,
         "crowd_count": crowd_count
     }
-    save_telemetry(data_record)
+    
+    # Keeping last 20 records
+    TELEMETRY_LOGS.insert(0, data_record)
+    if len(TELEMETRY_LOGS) > 20:
+        TELEMETRY_LOGS.pop()
 
 async def auto_telemetry_loop():
     while True:
@@ -56,11 +63,10 @@ async def auto_telemetry_loop():
             generate_random_telemetry()
         except Exception as e:
             print(f"Error in auto loop: {e}")
-        await asyncio.sleep(5)  # Generates data every 5 seconds
+        await asyncio.sleep(3)
 
 @app.on_event("startup")
 async def startup_event():
-    init_db()
     asyncio.create_task(auto_telemetry_loop())
 
 @app.get("/")
@@ -69,7 +75,7 @@ def read_root():
 
 @app.get("/api/v1/telemetry/history")
 def get_telemetry_history(limit: int = 10):
-    return get_recent_telemetry(limit)
+    return {"success": True, "history": TELEMETRY_LOGS[:limit]}
 
 @app.post("/api/v1/telemetry")
 def process_telemetry(payload: TelemetryPayload):
@@ -85,5 +91,8 @@ def process_telemetry(payload: TelemetryPayload):
         "crowd_count": payload.crowd_count
     }
 
-    save_telemetry(data_record)
+    TELEMETRY_LOGS.insert(0, data_record)
+    if len(TELEMETRY_LOGS) > 20:
+        TELEMETRY_LOGS.pop()
+        
     return {"success": True, "score": score, "status": status}
