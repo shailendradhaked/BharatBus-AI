@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 function App() {
   const [telemetryData, setTelemetryData] = useState([]);
@@ -47,15 +48,64 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Format data for Chart (Reverse so latest is right)
+  const chartData = [...telemetryData].reverse().map(item => ({
+    time: item.timestamp ? item.timestamp.split(' ')[1] : '',
+    Crowd: item.crowd_count,
+    Score: item.score
+  }));
+
+  const totalCrowd = telemetryData.reduce((acc, curr) => acc + curr.crowd_count, 0);
+  const avgScore = telemetryData.length > 0 ? (telemetryData.reduce((acc, curr) => acc + curr.score, 0) / telemetryData.length).toFixed(1) : 0;
+
   return (
     <div style={{ padding: '24px', backgroundColor: '#090d16', color: '#e2e8f0', minHeight: '100vh', fontFamily: 'system-ui, sans-serif' }}>
+      
+      {/* Top Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid #1e293b', paddingBottom: '16px' }}>
         <div>
           <h1 style={{ margin: 0, fontSize: '24px', color: '#38bdf8' }}>BharatBus-AI Command Center</h1>
-          <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>National Transport Infrastructure, Auto-Tasking & Fleet Optimization</p>
+          <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>National Transport Infrastructure, Analytics & AI Task Automation</p>
         </div>
         <span style={{ backgroundColor: '#0284c7', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>Live AI Engine Active</span>
       </header>
+
+      {/* KPI Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>TOTAL MONITORED CROWD</span>
+          <h2 style={{ margin: '8px 0 0 0', fontSize: '28px', color: '#38bdf8' }}>👥 {totalCrowd}</h2>
+        </div>
+        <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>NETWORK AVG BHARAT SCORE</span>
+          <h2 style={{ margin: '8px 0 0 0', fontSize: '28px', color: avgScore < 50 ? '#f43f5e' : '#10b981' }}>📊 {avgScore} / 100</h2>
+        </div>
+        <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>ACTIVE EMERGENCY TICKETS</span>
+          <h2 style={{ margin: '8px 0 0 0', fontSize: '28px', color: tickets.length > 0 ? '#f43f5e' : '#10b981' }}>🚨 {tickets.length}</h2>
+        </div>
+        <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
+          <span style={{ color: '#94a3b8', fontSize: '12px' }}>AI FLEET DISPATCHES</span>
+          <h2 style={{ margin: '8px 0 0 0', fontSize: '28px', color: '#0284c7' }}>🚌 {dispatches.length}</h2>
+        </div>
+      </div>
+
+      {/* Analytics Chart Section */}
+      <section style={{ backgroundColor: '#0f172a', padding: '20px', borderRadius: '8px', border: '1px solid #1e293b', marginBottom: '32px' }}>
+        <h2 style={{ fontSize: '16px', color: '#38bdf8', marginTop: 0, marginBottom: '16px' }}>📈 Real-Time Crowd Density vs Bharat Score Analytics</h2>
+        <div style={{ width: '100%', height: 260 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+              <XAxis dataKey="time" stroke="#64748b" />
+              <YAxis stroke="#64748b" />
+              <Tooltip contentStyle={{ backgroundColor: '#090d16', borderColor: '#334155' }} />
+              <Area type="monotone" dataKey="Crowd" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.2} name="Crowd Count" />
+              <Area type="monotone" dataKey="Score" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.2} name="Bharat Score" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
 
       {/* Grid Layout for AI Features */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '32px' }}>
