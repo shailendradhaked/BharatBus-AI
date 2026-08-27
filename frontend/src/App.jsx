@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Activity, 
-  Droplet, 
   Users, 
-  Sparkles, 
-  Thermometer, 
   AlertTriangle, 
   RefreshCw, 
   CheckCircle,
@@ -24,8 +21,12 @@ export default function App() {
       setLoading(true);
       const res = await fetch(`${BACKEND_URL}/api/v1/telemetry/history?limit=10`);
       if (!res.ok) throw new Error('Failed to fetch telemetry data');
+      
       const data = await res.json();
-      setTelemetryData(data);
+      
+      // Extract history array from API response
+      const list = data.history || data; 
+      setTelemetryData(Array.isArray(list) ? list : []);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -41,9 +42,10 @@ export default function App() {
   }, []);
 
   const getScoreBadge = (score) => {
-    if (score >= 75) return <span style={{ padding: '4px 8px', backgroundColor: '#14532d', color: '#4ade80', borderRadius: '12px', fontSize: '12px' }}>Optimal ({score})</span>;
-    if (score >= 50) return <span style={{ padding: '4px 8px', backgroundColor: '#713f12', color: '#facc15', borderRadius: '12px', fontSize: '12px' }}>Moderate ({score})</span>;
-    return <span style={{ padding: '4px 8px', backgroundColor: '#7f1d1d', color: '#f87171', borderRadius: '12px', fontSize: '12px' }}>Critical ({score})</span>;
+    const numScore = parseFloat(score || 0);
+    if (numScore >= 75) return <span style={{ padding: '4px 8px', backgroundColor: '#14532d', color: '#4ade80', borderRadius: '12px', fontSize: '12px' }}>Optimal ({numScore})</span>;
+    if (numScore >= 50) return <span style={{ padding: '4px 8px', backgroundColor: '#713f12', color: '#facc15', borderRadius: '12px', fontSize: '12px' }}>Moderate ({numScore})</span>;
+    return <span style={{ padding: '4px 8px', backgroundColor: '#7f1d1d', color: '#f87171', borderRadius: '12px', fontSize: '12px' }}>Critical ({numScore})</span>;
   };
 
   return (
@@ -90,10 +92,7 @@ export default function App() {
               <tr style={{ backgroundColor: '#020617', color: '#94a3b8', borderBottom: '1px solid #1e293b' }}>
                 <th style={{ padding: '16px' }}>Timestamp</th>
                 <th style={{ padding: '16px' }}>Station ID</th>
-                <th style={{ padding: '16px' }}>Water Level</th>
-                <th style={{ padding: '16px' }}>Cleanliness</th>
-                <th style={{ padding: '16px' }}>Crowd</th>
-                <th style={{ padding: '16px' }}>Temp</th>
+                <th style={{ padding: '16px' }}>Crowd Count</th>
                 <th style={{ padding: '16px' }}>Bharat Score</th>
                 <th style={{ padding: '16px' }}>Status</th>
               </tr>
@@ -101,28 +100,29 @@ export default function App() {
             <tbody>
               {telemetryData.length === 0 ? (
                 <tr>
-                  <td colSpan="8" style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
+                  <td colSpan="5" style={{ padding: '32px', textAlign: 'center', color: '#64748b' }}>
                     {loading ? 'Fetching terminal logs...' : 'No telemetry records found.'}
                   </td>
                 </tr>
               ) : (
                 telemetryData.map((log, index) => (
-                  <tr key={log.id || index} style={{ borderBottom: '1px solid #1e293b' }}>
+                  <tr key={index} style={{ borderBottom: '1px solid #1e293b' }}>
                     <td style={{ padding: '16px', color: '#94a3b8', fontFamily: 'monospace', fontSize: '12px' }}>{log.timestamp}</td>
                     <td style={{ padding: '16px', fontWeight: 'bold' }}>{log.station_id}</td>
-                    <td style={{ padding: '16px', color: '#38bdf8' }}><Droplet style={{ width: '14px', height: '14px', inlineSize: 'auto' }} /> {log.water_level}%</td>
-                    <td style={{ padding: '16px', color: '#34d399' }}><Sparkles style={{ width: '14px', height: '14px' }} /> {log.cleanliness}%</td>
-                    <td style={{ padding: '16px', color: '#c084fc' }}><Users style={{ width: '14px', height: '14px' }} /> {log.crowd_count}</td>
-                    <td style={{ padding: '16px', color: '#fbbf24' }}><Thermometer style={{ width: '14px', height: '14px' }} /> {log.temperature}°C</td>
-                    <td style={{ padding: '16px' }}>{getScoreBadge(log.bharat_score)}</td>
+                    <td style={{ padding: '16px', color: '#c084fc' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Users style={{ width: '14px', height: '14px' }} /> {log.crowd_count}
+                      </span>
+                    </td>
+                    <td style={{ padding: '16px' }}>{getScoreBadge(log.score)}</td>
                     <td style={{ padding: '16px' }}>
-                      {log.escalation_needed ? (
+                      {log.status === 'RED' ? (
                         <span style={{ color: '#f87171', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <ShieldAlert style={{ width: '16px', height: '16px' }} /> Alert Triggered
+                          <ShieldAlert style={{ width: '16px', height: '16px' }} /> Critical Alert
                         </span>
                       ) : (
-                        <span style={{ color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <CheckCircle style={{ width: '16px', height: '16px', color: '#22c55e' }} /> Normal
+                        <span style={{ color: '#4ade80', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <CheckCircle style={{ width: '16px', height: '16px' }} /> {log.status}
                         </span>
                       )}
                     </td>
