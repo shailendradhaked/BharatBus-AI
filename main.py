@@ -24,7 +24,8 @@ STATIONS = [
 ]
 
 TELEMETRY_LOGS = []
-ACTIVE_TICKETS = []  # न्यू Feature: टिकट स्टोर करने के लिए
+ACTIVE_TICKETS = []
+BUS_DISPATCH_SUGGESTIONS = []  # New: AI Fleet Dispatch Engine
 
 class TelemetryPayload(BaseModel):
     station_id: str
@@ -34,7 +35,7 @@ class TelemetryPayload(BaseModel):
     temperature: float
 
 def generate_random_telemetry():
-    global TELEMETRY_LOGS, ACTIVE_TICKETS
+    global TELEMETRY_LOGS, ACTIVE_TICKETS, BUS_DISPATCH_SUGGESTIONS
     station_id = random.choice(STATIONS)
     water_level = round(random.uniform(10.0, 100.0), 2)
     cleanliness_score = round(random.uniform(20.0, 100.0), 2)
@@ -44,7 +45,7 @@ def generate_random_telemetry():
     status = "RED" if score < 50 or crowd_count > 200 else "GREEN"
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Critical Alert होने पर Auto-Ticket जनरेट करें
+    # 1. Emergency Task Ticket Logic
     if status == "RED":
         issue_type = "High Crowd Emergency" if crowd_count > 200 else "Sanitation & Water Deficit"
         ticket = {
@@ -55,10 +56,24 @@ def generate_random_telemetry():
             "assigned_to": f"Supervisor @ {station_id}",
             "status": "OPEN"
         }
-        # डुप्लीकेट रोकने के लिए केवल टॉप 5 एक्टिव टिकट्स रखें
         ACTIVE_TICKETS.insert(0, ticket)
         if len(ACTIVE_TICKETS) > 5:
             ACTIVE_TICKETS.pop()
+
+    # 2. AI Fleet Optimization Algorithm (Overcrowding Smart Dispatch)
+    if crowd_count > 180:
+        buses_needed = max(1, (crowd_count - 150) // 25)
+        dispatch_recommendation = {
+            "dispatch_id": f"FLEET-{random.randint(100, 999)}",
+            "timestamp": timestamp,
+            "target_station": station_id,
+            "extra_buses": buses_needed,
+            "depot_source": "CENTRAL-RESERVE-DEPOT",
+            "estimated_arrival": "12 Mins"
+        }
+        BUS_DISPATCH_SUGGESTIONS.insert(0, dispatch_recommendation)
+        if len(BUS_DISPATCH_SUGGESTIONS) > 3:
+            BUS_DISPATCH_SUGGESTIONS.pop()
 
     data_record = {
         "timestamp": timestamp,
@@ -92,14 +107,17 @@ def read_root():
 def get_telemetry_history(limit: int = 10):
     return {"success": True, "history": TELEMETRY_LOGS[:limit]}
 
-# नया Endpoint: एक्टिव टिकट्स देखने के लिए
 @app.get("/api/v1/tickets")
 def get_tickets():
     return {"success": True, "tickets": ACTIVE_TICKETS}
 
-# नया Endpoint: टिकट Resolve (बंद) करने के लिए
 @app.post("/api/v1/tickets/resolve/{ticket_id}")
 def resolve_ticket(ticket_id: str):
     global ACTIVE_TICKETS
     ACTIVE_TICKETS = [t for t in ACTIVE_TICKETS if t["ticket_id"] != ticket_id]
     return {"success": True, "message": f"Ticket {ticket_id} resolved successfully"}
+
+# New Endpoint: Fleet Recommendations
+@app.get("/api/v1/fleet/suggestions")
+def get_fleet_suggestions():
+    return {"success": True, "dispatches": BUS_DISPATCH_SUGGESTIONS}
