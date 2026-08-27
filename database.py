@@ -6,9 +6,9 @@ def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS telemetry_logs (
+        CREATE TABLE IF NOT EXISTS telemetry (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            timestamp TEXT,
             station_id TEXT,
             score REAL,
             status TEXT,
@@ -18,16 +18,25 @@ def init_db():
     conn.commit()
     conn.close()
 
-def log_telemetry(station_id, score, status, crowd_count):
+def get_recent_telemetry(limit: int = 10):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO telemetry_logs (station_id, score, status, crowd_count)
-        VALUES (?, ?, ?, ?)
-    ''', (station_id, score, status, crowd_count))
-    conn.commit()
+        SELECT timestamp, station_id, score, status, crowd_count 
+        FROM telemetry 
+        ORDER BY id DESC 
+        LIMIT ?
+    ''', (limit,))
+    rows = cursor.fetchall()
     conn.close()
-
-if __name__ == "__main__":
-    init_db()
-    print("Database Initialized Successfully!")
+    
+    history = []
+    for row in rows:
+        history.append({
+            "timestamp": row[0],
+            "station_id": row[1],
+            "score": row[2],
+            "status": row[3],
+            "crowd_count": row[4]
+        })
+    return {"success": True, "history": history}
