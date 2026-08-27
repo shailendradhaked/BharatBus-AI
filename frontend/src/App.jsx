@@ -1,189 +1,149 @@
 import React, { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { 
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend 
+} from 'recharts';
 
-function App() {
-  const [telemetryData, setTelemetryData] = useState([]);
-  const [tickets, setTickets] = useState([]);
-  const [dispatches, setDispatches] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function App() {
+  const [viewMode, setViewMode] = useState('admin'); // 'admin' or 'passenger'
+  const [analyticsData, setAnalyticsData] = useState([]);
+  const [kpiStats, setKpiStats] = useState({
+    total_crowd: 1271,
+    avg_score: 61.3,
+    emergency_tickets: 5,
+    fleet_dispatches: 3
+  });
 
-  const fetchData = async () => {
-    try {
-      const [telemetryRes, ticketsRes, fleetRes] = await Promise.all([
-        fetch("https://bharatbus-ai.onrender.com/api/v1/telemetry/history?limit=10"),
-        fetch("https://bharatbus-ai.onrender.com/api/v1/tickets"),
-        fetch("https://bharatbus-ai.onrender.com/api/v1/fleet/suggestions")
-      ]);
-
-      const telemetryJson = await telemetryRes.json();
-      const ticketsJson = await ticketsRes.json();
-      const fleetJson = await fleetRes.json();
-
-      if (telemetryJson.success && telemetryJson.history) setTelemetryData(telemetryJson.history);
-      if (ticketsJson.success && ticketsJson.tickets) setTickets(ticketsJson.tickets);
-      if (fleetJson.success && fleetJson.dispatches) setDispatches(fleetJson.dispatches);
-
-    } catch (error) {
-      console.error("Error fetching live data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleResolveTicket = async (ticketId) => {
-    try {
-      const res = await fetch(`https://bharatbus-ai.onrender.com/api/v1/tickets/resolve/${ticketId}`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setTickets(prev => prev.filter(t => t.ticket_id !== ticketId));
-      }
-    } catch (error) {
-      console.error("Failed to resolve ticket:", error);
-    }
-  };
-
+  // Simulated live telemetry fetch
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 4000);
-    return () => clearInterval(interval);
+    const timer = setInterval(() => {
+      const now = new Date();
+      const timeStr = now.toTimeString().split(' ')[0];
+      
+      const newPoint = {
+        time: timeStr,
+        crowd: Math.floor(Math.random() * 150) + 100,
+        bharatScore: Math.floor(Math.random() * 30) + 50
+      };
+
+      setAnalyticsData(prev => [...prev.slice(-10), newPoint]);
+    }, 3000);
+
+    return () => clearInterval(timer);
   }, []);
 
-  // Format data for Chart (Reverse so latest is right)
-  const chartData = [...telemetryData].reverse().map(item => ({
-    time: item.timestamp ? item.timestamp.split(' ')[1] : '',
-    Crowd: item.crowd_count,
-    Score: item.score
-  }));
-
-  const totalCrowd = telemetryData.reduce((acc, curr) => acc + curr.crowd_count, 0);
-  const avgScore = telemetryData.length > 0 ? (telemetryData.reduce((acc, curr) => acc + curr.score, 0) / telemetryData.length).toFixed(1) : 0;
-
   return (
-    <div style={{ padding: '24px', backgroundColor: '#090d16', color: '#e2e8f0', minHeight: '100vh', fontFamily: 'system-ui, sans-serif' }}>
+    <div style={{ backgroundColor: '#0b0f19', color: '#f3f4f6', minHeight: '100vh', padding: '20px', fontFamily: 'Inter, sans-serif' }}>
       
-      {/* Top Header */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid #1e293b', paddingBottom: '16px' }}>
+      {/* Top Header & View Switcher */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #1f2937', paddingBottom: '15px' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '24px', color: '#38bdf8' }}>BharatBus-AI Command Center</h1>
-          <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>National Transport Infrastructure, Analytics & AI Task Automation</p>
+          <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#38bdf8', margin: 0 }}>BharatBus-AI Portal</h1>
+          <p style={{ fontSize: '12px', color: '#9ca3af', margin: '4px 0 0 0' }}>National Transport Infrastructure, Analytics & Passenger QR Engine</p>
         </div>
-        <span style={{ backgroundColor: '#0284c7', padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>Live AI Engine Active</span>
-      </header>
-
-      {/* KPI Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-        <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
-          <span style={{ color: '#94a3b8', fontSize: '12px' }}>TOTAL MONITORED CROWD</span>
-          <h2 style={{ margin: '8px 0 0 0', fontSize: '28px', color: '#38bdf8' }}>👥 {totalCrowd}</h2>
-        </div>
-        <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
-          <span style={{ color: '#94a3b8', fontSize: '12px' }}>NETWORK AVG BHARAT SCORE</span>
-          <h2 style={{ margin: '8px 0 0 0', fontSize: '28px', color: avgScore < 50 ? '#f43f5e' : '#10b981' }}>📊 {avgScore} / 100</h2>
-        </div>
-        <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
-          <span style={{ color: '#94a3b8', fontSize: '12px' }}>ACTIVE EMERGENCY TICKETS</span>
-          <h2 style={{ margin: '8px 0 0 0', fontSize: '28px', color: tickets.length > 0 ? '#f43f5e' : '#10b981' }}>🚨 {tickets.length}</h2>
-        </div>
-        <div style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
-          <span style={{ color: '#94a3b8', fontSize: '12px' }}>AI FLEET DISPATCHES</span>
-          <h2 style={{ margin: '8px 0 0 0', fontSize: '28px', color: '#0284c7' }}>🚌 {dispatches.length}</h2>
-        </div>
-      </div>
-
-      {/* Analytics Chart Section */}
-      <section style={{ backgroundColor: '#0f172a', padding: '20px', borderRadius: '8px', border: '1px solid #1e293b', marginBottom: '32px' }}>
-        <h2 style={{ fontSize: '16px', color: '#38bdf8', marginTop: 0, marginBottom: '16px' }}>📈 Real-Time Crowd Density vs Bharat Score Analytics</h2>
-        <div style={{ width: '100%', height: 260 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="time" stroke="#64748b" />
-              <YAxis stroke="#64748b" />
-              <Tooltip contentStyle={{ backgroundColor: '#090d16', borderColor: '#334155' }} />
-              <Area type="monotone" dataKey="Crowd" stroke="#f43f5e" fill="#f43f5e" fillOpacity={0.2} name="Crowd Count" />
-              <Area type="monotone" dataKey="Score" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.2} name="Bharat Score" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      {/* Grid Layout for AI Features */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '32px' }}>
         
-        {/* Section 1: Emergency Tickets */}
-        <section style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
-          <h2 style={{ fontSize: '16px', color: '#f43f5e', marginTop: 0 }}>🚨 Emergency Task Automation ({tickets.length})</h2>
-          {tickets.length === 0 ? (
-            <p style={{ color: '#10b981', fontSize: '14px' }}>✅ Zero pending task alerts.</p>
-          ) : (
-            tickets.map(t => (
-              <div key={t.ticket_id} style={{ backgroundColor: '#1e1b4b', padding: '12px', borderRadius: '6px', marginBottom: '10px', border: '1px solid #3730a3' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#a5b4fc' }}>
-                  <span>{t.ticket_id}</span>
-                  <span>{t.station_id}</span>
-                </div>
-                <p style={{ margin: '6px 0', fontSize: '13px', color: '#fca5a5' }}><strong>Issue:</strong> {t.issue}</p>
-                <button onClick={() => handleResolveTicket(t.ticket_id)} style={{ width: '100%', padding: '6px', backgroundColor: '#10b981', border: 'none', borderRadius: '4px', color: '#fff', cursor: 'pointer', fontWeight: 'bold' }}>
-                  Mark Resolved ✓
-                </button>
-              </div>
-            ))
-          )}
-        </section>
-
-        {/* Section 2: AI Fleet Re-Routing Engine */}
-        <section style={{ backgroundColor: '#0f172a', padding: '16px', borderRadius: '8px', border: '1px solid #1e293b' }}>
-          <h2 style={{ fontSize: '16px', color: '#38bdf8', marginTop: 0 }}>🚌 AI Smart Fleet Dispatch ({dispatches.length})</h2>
-          {dispatches.length === 0 ? (
-            <p style={{ color: '#64748b', fontSize: '14px' }}>No congestion detected. Extra buses not required.</p>
-          ) : (
-            dispatches.map(d => (
-              <div key={d.dispatch_id} style={{ backgroundColor: '#0c4a6e', padding: '12px', borderRadius: '6px', marginBottom: '10px', border: '1px solid #0284c7' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#7dd3fc' }}>
-                  <span>{d.dispatch_id}</span>
-                  <span>ETA: {d.estimated_arrival}</span>
-                </div>
-                <h4 style={{ margin: '4px 0', color: '#fff' }}>Deploy +{d.extra_buses} Extra Buses → {d.target_station}</h4>
-                <p style={{ margin: 0, fontSize: '12px', color: '#bae6fd' }}>Source: {d.depot_source}</p>
-              </div>
-            ))
-          )}
-        </section>
-
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={() => setViewMode('admin')}
+            style={{
+              padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer',
+              backgroundColor: viewMode === 'admin' ? '#0284c7' : '#1f2937',
+              color: '#fff', border: 'none'
+            }}
+          >
+            🛡️ Admin Command Center
+          </button>
+          <button 
+            onClick={() => setViewMode('passenger')}
+            style={{
+              padding: '8px 16px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer',
+              backgroundColor: viewMode === 'passenger' ? '#10b981' : '#1f2937',
+              color: '#fff', border: 'none'
+            }}
+          >
+            📱 Passenger QR View
+          </button>
+        </div>
       </div>
 
-      {/* Telemetry Table */}
-      <section>
-        <h2 style={{ fontSize: '18px', color: '#38bdf8' }}>Live Terminal Logs Stream</h2>
-        {loading ? <p>Loading stream...</p> : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', backgroundColor: '#0f172a', borderRadius: '8px', overflow: 'hidden' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#1e293b', textAlign: 'left', color: '#94a3b8', fontSize: '14px' }}>
-                <th style={{ padding: '12px' }}>Timestamp</th>
-                <th style={{ padding: '12px' }}>Station ID</th>
-                <th style={{ padding: '12px' }}>Crowd Count</th>
-                <th style={{ padding: '12px' }}>Bharat Score</th>
-                <th style={{ padding: '12px' }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {telemetryData.map((item, idx) => (
-                <tr key={idx} style={{ borderBottom: '1px solid #1e293b', fontSize: '14px' }}>
-                  <td style={{ padding: '12px' }}>{item.timestamp}</td>
-                  <td style={{ padding: '12px', fontWeight: 'bold' }}>{item.station_id}</td>
-                  <td style={{ padding: '12px' }}>👤 {item.crowd_count}</td>
-                  <td style={{ padding: '12px', fontWeight: 'bold' }}>{item.score}</td>
-                  <td style={{ padding: '12px', color: item.status === 'RED' ? '#f43f5e' : '#10b981', fontWeight: 'bold' }}>
-                    {item.status === 'RED' ? '⚠️ Critical' : '🟢 Optimal'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+      {/* Conditional Rendering based on View Mode */}
+      {viewMode === 'admin' ? (
+        <div>
+          {/* KPI Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '15px', marginBottom: '25px' }}>
+            <div style={{ backgroundColor: '#111827', padding: '15px', borderRadius: '8px', borderLeft: '4px solid #3b82f6' }}>
+              <div style={{ fontSize: '12px', color: '#9ca3af' }}>TOTAL MONITORED CROWD</div>
+              <div style={{ fontSize: '26px', fontWeight: 'bold', marginTop: '5px' }}>👥 {kpiStats.total_crowd}</div>
+            </div>
+            <div style={{ backgroundColor: '#111827', padding: '15px', borderRadius: '8px', borderLeft: '4px solid #10b981' }}>
+              <div style={{ fontSize: '12px', color: '#9ca3af' }}>NETWORK AVG BHARAT SCORE</div>
+              <div style={{ fontSize: '26px', fontWeight: 'bold', marginTop: '5px' }}>📊 {kpiStats.avg_score} / 100</div>
+            </div>
+            <div style={{ backgroundColor: '#111827', padding: '15px', borderRadius: '8px', borderLeft: '4px solid #ef4444' }}>
+              <div style={{ fontSize: '12px', color: '#9ca3af' }}>ACTIVE EMERGENCY TICKETS</div>
+              <div style={{ fontSize: '26px', fontWeight: 'bold', marginTop: '5px' }}>🚨 {kpiStats.emergency_tickets}</div>
+            </div>
+            <div style={{ backgroundColor: '#111827', padding: '15px', borderRadius: '8px', borderLeft: '4px solid #f59e0b' }}>
+              <div style={{ fontSize: '12px', color: '#9ca3af' }}>AI FLEET DISPATCHES</div>
+              <div style={{ fontSize: '26px', fontWeight: 'bold', marginTop: '5px' }}>🚌 {kpiStats.fleet_dispatches}</div>
+            </div>
+          </div>
+
+          {/* Recharts Analytics Section */}
+          <div style={{ backgroundColor: '#111827', padding: '20px', borderRadius: '8px' }}>
+            <h3 style={{ fontSize: '16px', marginBottom: '15px', color: '#e5e7eb' }}>📈 Real-Time Crowd Density vs Bharat Score Analytics</h3>
+            <div style={{ width: '100%', height: '300px' }}>
+              <ResponsiveContainer>
+                <BarChart data={analyticsData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis dataKey="time" stroke="#9ca3af" />
+                  <YAxis stroke="#9ca3af" />
+                  <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', color: '#fff' }} />
+                  <Legend />
+                  <Bar dataKey="crowd" fill="#3b82f6" name="Crowd Density" />
+                  <Bar dataKey="bharatScore" fill="#10b981" name="Bharat Score" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Passenger QR Portal View */
+        <div style={{ maxWidth: '600px', margin: '0 auto', backgroundColor: '#111827', padding: '25px', borderRadius: '12px', border: '1px solid #374151' }}>
+          <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+            <span style={{ backgroundColor: '#065f46', color: '#34d399', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>LIVE BUS #DL-01-AI-4029</span>
+            <h2 style={{ fontSize: '22px', margin: '10px 0 5px 0' }}>Route: Kashmere Gate ➔ Anand Vihar</h2>
+            <p style={{ fontSize: '13px', color: '#9ca3af' }}>Scanned via Smart Passenger QR Terminal</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '20px' }}>
+            <div style={{ backgroundColor: '#1f2937', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#9ca3af' }}>Current Crowd Load</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#f59e0b', marginTop: '5px' }}>Moderate (68%)</div>
+            </div>
+            <div style={{ backgroundColor: '#1f2937', padding: '15px', borderRadius: '8px', textAlign: 'center' }}>
+              <div style={{ fontSize: '12px', color: '#9ca3af' }}>Next Stop ETA</div>
+              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#38bdf8', marginTop: '5px' }}>3 mins</div>
+            </div>
+          </div>
+
+          <div style={{ backgroundColor: '#1f2937', padding: '15px', borderRadius: '8px', marginBottom: '20px' }}>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#38bdf8' }}>🎫 AI Quick Services</h4>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button style={{ flex: 1, backgroundColor: '#0284c7', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+                Book Ticket (UPI)
+              </button>
+              <button style={{ flex: 1, backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '10px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer' }}>
+                SOS Emergency
+              </button>
+            </div>
+          </div>
+
+          <div style={{ textAlign: 'center', fontSize: '12px', color: '#6b7280' }}>
+            Powered by BharatBus-AI Autonomous Public Transit Framework
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
-
-export default App;
