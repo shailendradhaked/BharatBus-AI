@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from "react";
+
 import {
   MapContainer,
   TileLayer,
   Marker,
   Popup,
+  useMap,
 } from "react-leaflet";
+
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
@@ -22,7 +25,9 @@ import {
 // PRODUCTION BACKEND
 // ============================================================
 
-const API_URL = "https://bharatbus-ai.onrender.com";
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  "https://bharatbus-ai.onrender.com";
 
 // ============================================================
 // LEAFLET MARKER FIX
@@ -40,18 +45,22 @@ L.Icon.Default.mergeOptions({
 });
 
 // ============================================================
-// DEMO ANALYTICS DATA
+// FALLBACK / DEMO DATA
 // ============================================================
 
-const crowdData = [
-  { time: "10 AM", crowd: 400 },
-  { time: "11 AM", crowd: 850 },
-  { time: "12 PM", crowd: 1200 },
-  { time: "1 PM", crowd: 950 },
-  { time: "2 PM", crowd: 1400 },
-  { time: "3 PM", crowd: 1250 },
-  { time: "4 PM", crowd: 1650 },
-];
+const fallbackRoute = {
+  id: 1,
+  source: "Kashmere Gate",
+  destination: "Anand Vihar",
+  fare: 30,
+  bus_no: "DL-01-AI-4029",
+};
+
+const initialTelemetry = {
+  total_crowd: 1280,
+  avg_score: 65.4,
+  booked_count: 5,
+};
 
 const infrastructure = {
   busStands: 248,
@@ -102,6 +111,36 @@ const button = {
 };
 
 // ============================================================
+// DEMO CHART DATA
+// ============================================================
+
+const crowdData = [
+  { time: "10 AM", crowd: 400 },
+  { time: "11 AM", crowd: 850 },
+  { time: "12 PM", crowd: 1200 },
+  { time: "1 PM", crowd: 950 },
+  { time: "2 PM", crowd: 1400 },
+  { time: "3 PM", crowd: 1250 },
+  { time: "4 PM", crowd: 1650 },
+];
+
+// ============================================================
+// MAP FOLLOW COMPONENT
+// ============================================================
+
+function MapUpdater({ position }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (position) {
+      map.setView(position);
+    }
+  }, [position, map]);
+
+  return null;
+}
+
+// ============================================================
 // APP
 // ============================================================
 
@@ -118,18 +157,46 @@ export default function App() {
 
   const [notification, setNotification] = useState("");
 
-  const [backendStatus, setBackendStatus] = useState("Checking...");
+  const [backendStatus, setBackendStatus] =
+    useState("Checking...");
+
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const [busPosition, setBusPosition] = useState([
     28.6139,
     77.209,
   ]);
 
-  const [telemetry, setTelemetry] = useState({
-    total_crowd: 1280,
-    avg_score: 65.4,
-    booked_count: 5,
-  });
+  const [telemetry, setTelemetry] =
+    useState(initialTelemetry);
+
+  // ==========================================================
+  // API HELPER
+  // ==========================================================
+
+  const apiFetch = async (endpoint, options = {}) => {
+    const response = await fetch(
+      `${API_BASE}${endpoint}`,
+      {
+        ...options,
+        headers: {
+          Accept: "application/json",
+          ...(options.body
+            ? { "Content-Type": "application/json" }
+            : {}),
+          ...(options.headers || {}),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        `${endpoint} failed with ${response.status}`
+      );
+    }
+
+    return response;
+  };
 
   // ==========================================================
   // FETCH ROUTES
@@ -137,36 +204,45 @@ export default function App() {
 
   const fetchRoutes = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/routes`);
-
-      if (!response.ok) {
-        throw new Error("Routes API failed");
-      }
+      const response = await apiFetch("/api/routes");
 
       const data = await response.json();
 
-      setRoutesList(data);
+      const routes = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.routes)
+        ? data.routes
+        : [];
 
-      if (data.length > 0) {
-        setSelectedRoute(data[0]);
+      if (routes.length > 0) {
+        setRoutesList(routes);
+
+        setSelectedRoute((previous) => {
+          if (!previous) return routes[0];
+
+          return (
+            routes.find(
+              (route) =>
+                String(route.id) ===
+                String(previous.id)
+            ) || routes[0]
+          );
+        });
+      } else {
+        setRoutesList([fallbackRoute]);
+        setSelectedRoute(fallbackRoute);
       }
 
       setBackendStatus("Online");
     } catch (error) {
       console.error("Routes API:", error);
 
-      setBackendStatus("Online • Demo Mode");
-
-      const fallbackRoute = {
-        id: 1,
-        source: "Kashmere Gate",
-        destination: "Anand Vihar",
-        fare: 30,
-        bus_no: "DL-01-AI-4029",
-      };
-
       setRoutesList([fallbackRoute]);
-      setSelectedRoute(fallbackRoute);
+      setSelectedRoute((previous) =>
+        previous || fallbackRoute
+      );
+
+      setBackendStatus("Online • Demo Fallback");
     }
   };
 
@@ -176,48 +252,66 @@ export default function App() {
 
   const fetchTelemetry = async () => {
     try {
-      const response = await fetch(
-        `${API_URL}/api/telemetry`
+      const response = await apiFetch(
+        "/api/telemetry"
       );
-
-      if (!response.ok) {
-        throw new Error("Telemetry API failed");
-      }
 
       const data = await response.json();
 
+      const telemetryData =
+        data?.data && typeof data.data === "object"
+          ? data.data
+          : data;
+
       setTelemetry((previous) => ({
         ...previous,
-        ...data,
+        ...telemetryData,
       }));
 
       setBackendStatus("Online");
+      setLastUpdated(new Date());
     } catch (error) {
       console.error("Telemetry API:", error);
+
+      setBackendStatus((previous) =>
+        previous === "Checking..."
+          ? "Offline • Demo Mode"
+          : previous
+      );
     }
   };
 
   // ==========================================================
-  // INITIAL LOAD
+  // INITIAL LOAD + LIVE POLLING
   // ==========================================================
 
   useEffect(() => {
     fetchRoutes();
     fetchTelemetry();
 
+    // Live telemetry every 15 seconds
     const telemetryInterval = setInterval(() => {
       fetchTelemetry();
     }, 15000);
 
+    // Refresh routes every 60 seconds
+    const routesInterval = setInterval(() => {
+      fetchRoutes();
+    }, 60000);
+
+    // GPS movement simulation
     const gpsInterval = setInterval(() => {
       setBusPosition((previous) => [
-        previous[0] + (Math.random() - 0.5) * 0.002,
-        previous[1] + (Math.random() - 0.5) * 0.002,
+        previous[0] +
+          (Math.random() - 0.5) * 0.002,
+        previous[1] +
+          (Math.random() - 0.5) * 0.002,
       ]);
     }, 4000);
 
     return () => {
       clearInterval(telemetryInterval);
+      clearInterval(routesInterval);
       clearInterval(gpsInterval);
     };
   }, []);
@@ -227,33 +321,38 @@ export default function App() {
   // ==========================================================
 
   const handlePayment = async () => {
-    try {
-      if (!selectedRoute) return;
+    if (!selectedRoute) return;
 
-      const response = await fetch(
-        `${API_URL}/api/book-ticket`,
+    if (!passengerName.trim()) {
+      setNotification(
+        "⚠️ Please enter passenger name."
+      );
+      return;
+    }
+
+    try {
+      const response = await apiFetch(
+        "/api/book-ticket",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
           body: JSON.stringify({
-            name: passengerName,
+            name: passengerName.trim(),
             route: `${selectedRoute.source} ➔ ${selectedRoute.destination}`,
-            amount: selectedRoute.fare,
+            amount: Number(selectedRoute.fare || 30),
           }),
         }
       );
 
-      if (!response.ok) {
-        throw new Error("Booking API failed");
-      }
-
       const result = await response.json();
 
       setNotification(
-        `✅ ${result.message || "Ticket booked successfully"}`
+        `✅ ${
+          result.message ||
+          "Ticket booked successfully"
+        }`
       );
+
+      setBackendStatus("Online");
     } catch (error) {
       console.error("Booking API:", error);
 
@@ -274,7 +373,28 @@ export default function App() {
   };
 
   // ==========================================================
-  // APP
+  // REFRESH BUTTON
+  // ==========================================================
+
+  const handleRefresh = async () => {
+    setBackendStatus("Refreshing...");
+
+    await Promise.all([
+      fetchRoutes(),
+      fetchTelemetry(),
+    ]);
+  };
+
+  // ==========================================================
+  // LAST UPDATED TEXT
+  // ==========================================================
+
+  const updatedText = lastUpdated
+    ? lastUpdated.toLocaleTimeString()
+    : "Waiting for data";
+
+  // ==========================================================
+  // UI
   // ==========================================================
 
   return (
@@ -284,7 +404,9 @@ export default function App() {
         background: "#0b0f19",
         color: "#f3f4f6",
         padding: "20px",
-        fontFamily: "Inter, Arial, sans-serif",
+        fontFamily:
+          "Inter, Arial, sans-serif",
+        boxSizing: "border-box",
       }}
     >
       {/* ======================================================
@@ -298,7 +420,8 @@ export default function App() {
           alignItems: "center",
           flexWrap: "wrap",
           gap: "15px",
-          borderBottom: "1px solid #1f2937",
+          borderBottom:
+            "1px solid #1f2937",
           paddingBottom: "15px",
           marginBottom: "20px",
         }}
@@ -321,7 +444,8 @@ export default function App() {
               fontSize: "11px",
             }}
           >
-            AI-Powered Smart Public Transport Infrastructure
+            AI-Powered Smart Public Transport
+            Infrastructure
           </p>
         </div>
 
@@ -333,7 +457,9 @@ export default function App() {
           }}
         >
           <button
-            onClick={() => setActiveTab("passenger")}
+            onClick={() =>
+              setActiveTab("passenger")
+            }
             style={{
               ...button,
               background:
@@ -346,7 +472,9 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab("admin")}
+            onClick={() =>
+              setActiveTab("admin")
+            }
             style={{
               ...button,
               background:
@@ -356,6 +484,16 @@ export default function App() {
             }}
           >
             🏢 AI Command Center
+          </button>
+
+          <button
+            onClick={handleRefresh}
+            style={{
+              ...button,
+              background: "#374151",
+            }}
+          >
+            🔄 Refresh
           </button>
         </div>
       </header>
@@ -368,7 +506,8 @@ export default function App() {
         <div
           style={{
             background: "#065f46",
-            border: "1px solid #34d399",
+            border:
+              "1px solid #34d399",
             padding: "12px",
             borderRadius: "8px",
             marginBottom: "18px",
@@ -419,7 +558,8 @@ export default function App() {
               <h2
                 style={{
                   fontSize: "18px",
-                  margin: "10px 0 5px",
+                  margin:
+                    "10px 0 5px",
                 }}
               >
                 {selectedRoute
@@ -453,13 +593,16 @@ export default function App() {
               </label>
 
               <select
-                value={selectedRoute?.id || ""}
+                value={
+                  selectedRoute?.id || ""
+                }
                 onChange={(event) => {
-                  const route = routesList.find(
-                    (item) =>
-                      String(item.id) ===
-                      event.target.value
-                  );
+                  const route =
+                    routesList.find(
+                      (item) =>
+                        String(item.id) ===
+                        event.target.value
+                    );
 
                   setSelectedRoute(route);
                 }}
@@ -469,20 +612,23 @@ export default function App() {
                   padding: "10px",
                   background: "#111827",
                   color: "#fff",
-                  border: "1px solid #374151",
+                  border:
+                    "1px solid #374151",
                   borderRadius: "6px",
                 }}
               >
-                {routesList.map((route) => (
-                  <option
-                    key={route.id}
-                    value={route.id}
-                  >
-                    {route.source} →{" "}
-                    {route.destination} — ₹
-                    {route.fare}
-                  </option>
-                ))}
+                {routesList.map(
+                  (route) => (
+                    <option
+                      key={route.id}
+                      value={route.id}
+                    >
+                      {route.source} →{" "}
+                      {route.destination} — ₹
+                      {route.fare}
+                    </option>
+                  )
+                )}
               </select>
             </div>
 
@@ -497,14 +643,18 @@ export default function App() {
                 <div
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
-                    marginBottom: "15px",
+                    justifyContent:
+                      "space-between",
+                    marginBottom:
+                      "15px",
                   }}
                 >
                   <span>
                     Fare:{" "}
                     <b>
-                      ₹{selectedRoute?.fare || 30}
+                      ₹
+                      {selectedRoute?.fare ||
+                        30}
                     </b>
                   </span>
 
@@ -536,7 +686,9 @@ export default function App() {
                 onSubmit={(event) => {
                   event.preventDefault();
 
-                  if (passengerName.trim()) {
+                  if (
+                    passengerName.trim()
+                  ) {
                     setPaymentStep("qr");
                   }
                 }}
@@ -565,13 +717,16 @@ export default function App() {
                   required
                   style={{
                     width: "100%",
-                    boxSizing: "border-box",
+                    boxSizing:
+                      "border-box",
                     padding: "11px",
                     background: "#111827",
-                    border: "1px solid #374151",
+                    border:
+                      "1px solid #374151",
                     color: "#fff",
                     borderRadius: "6px",
-                    marginBottom: "12px",
+                    marginBottom:
+                      "12px",
                   }}
                 />
 
@@ -584,7 +739,8 @@ export default function App() {
                   }}
                 >
                   Proceed ₹
-                  {selectedRoute?.fare || 30}
+                  {selectedRoute?.fare ||
+                    30}
                 </button>
 
                 <button
@@ -617,12 +773,14 @@ export default function App() {
                   }}
                 >
                   Scan & Pay ₹
-                  {selectedRoute?.fare || 30}
+                  {selectedRoute?.fare ||
+                    30}
                 </h3>
 
                 <div
                   style={{
-                    display: "inline-block",
+                    display:
+                      "inline-block",
                     background: "#fff",
                     padding: "15px",
                     borderRadius: "8px",
@@ -631,6 +789,8 @@ export default function App() {
                   <img
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=bharatbus@icici%26pn=BharatBusAI%26am=${selectedRoute?.fare || 30}.00%26cu=INR`}
                     alt="BharatBus UPI QR"
+                    width="180"
+                    height="180"
                   />
                 </div>
 
@@ -648,11 +808,12 @@ export default function App() {
 
                 <button
                   onClick={() =>
-                    setShowPayment(false)
+                    setPaymentStep("form")
                   }
                   style={{
                     marginTop: "10px",
-                    background: "transparent",
+                    background:
+                      "transparent",
                     color: "#9ca3af",
                     border: "none",
                     cursor: "pointer",
@@ -677,22 +838,38 @@ export default function App() {
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                justifyContent:
+                  "space-between",
                 alignItems: "center",
+                gap: "10px",
+                flexWrap: "wrap",
               }}
             >
-              <h3
-                style={{
-                  color: "#38bdf8",
-                  marginTop: 0,
-                }}
-              >
-                🗺️ Live Bus GPS
-              </h3>
+              <div>
+                <h3
+                  style={{
+                    color: "#38bdf8",
+                    marginTop: 0,
+                    marginBottom: "4px",
+                  }}
+                >
+                  🗺️ Live Bus GPS
+                </h3>
+
+                <span style={muted}>
+                  Last update:{" "}
+                  {updatedText}
+                </span>
+              </div>
 
               <span
                 style={{
-                  color: "#34d399",
+                  color:
+                    backendStatus.includes(
+                      "Offline"
+                    )
+                      ? "#f87171"
+                      : "#34d399",
                   fontSize: "11px",
                 }}
               >
@@ -705,6 +882,7 @@ export default function App() {
                 flex: 1,
                 overflow: "hidden",
                 borderRadius: "8px",
+                marginTop: "10px",
               }}
             >
               <MapContainer
@@ -715,12 +893,18 @@ export default function App() {
                   height: "100%",
                 }}
               >
+                <MapUpdater
+                  position={busPosition}
+                />
+
                 <TileLayer
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                   attribution="© OpenStreetMap"
                 />
 
-                <Marker position={busPosition}>
+                <Marker
+                  position={busPosition}
+                >
                   <Popup>
                     <b>
                       Bus #
@@ -750,7 +934,8 @@ export default function App() {
           <div
             style={{
               display: "flex",
-              justifyContent: "space-between",
+              justifyContent:
+                "space-between",
               alignItems: "center",
               flexWrap: "wrap",
               gap: "12px",
@@ -764,7 +949,8 @@ export default function App() {
                   color: "#38bdf8",
                 }}
               >
-                🇮🇳 BharatBus AI Command Center
+                🇮🇳 BharatBus AI
+                Command Center
               </h2>
 
               <p
@@ -773,25 +959,73 @@ export default function App() {
                   fontSize: "12px",
                 }}
               >
-                National Smart Public Transport
-                Infrastructure Intelligence
+                National Smart Public
+                Transport Infrastructure
+                Intelligence
               </p>
             </div>
 
             <span
               style={{
-                background: "#065f46",
-                color: "#34d399",
-                border: "1px solid #34d399",
-                padding: "7px 12px",
+                background:
+                  backendStatus.includes(
+                    "Offline"
+                  )
+                    ? "#7f1d1d"
+                    : "#065f46",
+                color:
+                  backendStatus.includes(
+                    "Offline"
+                  )
+                    ? "#fca5a5"
+                    : "#34d399",
+                border:
+                  "1px solid currentColor",
+                padding:
+                  "7px 12px",
                 borderRadius: "20px",
                 fontSize: "10px",
                 fontWeight: "bold",
               }}
             >
-              ● SYSTEM {backendStatus.toUpperCase()}
+              ● SYSTEM{" "}
+              {backendStatus.toUpperCase()}
             </span>
           </div>
+
+          {/* LIVE STATUS */}
+
+          <section
+            style={{
+              ...section,
+              padding: "14px 18px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent:
+                  "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: "10px",
+              }}
+            >
+              <span style={muted}>
+                🔄 Live telemetry polling
+                every 15 seconds
+              </span>
+
+              <span
+                style={{
+                  color: "#34d399",
+                  fontSize: "11px",
+                }}
+              >
+                API: {API_BASE}
+              </span>
+            </div>
+          </section>
 
           {/* KPI */}
 
@@ -835,7 +1069,8 @@ export default function App() {
                 }}
               >
                 {Number(
-                  telemetry.total_crowd || 0
+                  telemetry.total_crowd ||
+                    0
                 ).toLocaleString()}
               </h2>
 
@@ -912,7 +1147,8 @@ export default function App() {
                   margin: 0,
                 }}
               >
-                {infrastructure.healthScore}/100
+                {infrastructure.healthScore}
+                /100
               </h2>
 
               <small style={muted}>
@@ -930,7 +1166,8 @@ export default function App() {
                 marginTop: 0,
               }}
             >
-              🚨 Live AI Infrastructure Alerts
+              🚨 Live AI Infrastructure
+              Alerts
             </h3>
 
             <div
@@ -956,12 +1193,13 @@ export default function App() {
                 </strong>
 
                 <h4>
-                  Platform 4 — Garbage Overflow
+                  Platform 4 —
+                  Garbage Overflow
                 </h4>
 
                 <p style={muted}>
-                  AI detected excessive waste
-                  accumulation.
+                  AI detected excessive
+                  waste accumulation.
                 </p>
 
                 <span
@@ -989,12 +1227,13 @@ export default function App() {
                 </strong>
 
                 <h4>
-                  Platform 2 — High Crowd Density
+                  Platform 2 — High
+                  Crowd Density
                 </h4>
 
                 <p style={muted}>
-                  Occupancy approaching safe
-                  capacity.
+                  Occupancy approaching
+                  safe capacity.
                 </p>
 
                 <span
@@ -1022,12 +1261,13 @@ export default function App() {
                 </strong>
 
                 <h4>
-                  Public Toilet — Cleaning
-                  Overdue
+                  Public Toilet —
+                  Cleaning Overdue
                 </h4>
 
                 <p style={muted}>
-                  Maintenance service required.
+                  Maintenance service
+                  required.
                 </p>
 
                 <span
@@ -1051,8 +1291,8 @@ export default function App() {
                 marginTop: 0,
               }}
             >
-              🏢 Smart Bus Stand Facility
-              Monitoring
+              🏢 Smart Bus Stand
+              Facility Monitoring
             </h3>
 
             <div
@@ -1064,10 +1304,13 @@ export default function App() {
               }}
             >
               <div style={card}>
-                <strong>🌡️ Temperature</strong>
+                <strong>
+                  🌡️ Temperature
+                </strong>
 
                 <h2>
-                  {infrastructure.temperature}°C
+                  {infrastructure.temperature}
+                  °C
                 </h2>
 
                 <span
@@ -1081,7 +1324,9 @@ export default function App() {
               </div>
 
               <div style={card}>
-                <strong>💧 Humidity</strong>
+                <strong>
+                  💧 Humidity
+                </strong>
 
                 <h2>
                   {infrastructure.humidity}%
@@ -1098,7 +1343,9 @@ export default function App() {
               </div>
 
               <div style={card}>
-                <strong>🚰 Water Level</strong>
+                <strong>
+                  🚰 Water Level
+                </strong>
 
                 <h2>
                   {infrastructure.waterLevel}%
@@ -1115,7 +1362,9 @@ export default function App() {
               </div>
 
               <div style={card}>
-                <strong>🚻 Toilet Health</strong>
+                <strong>
+                  🚻 Toilet Health
+                </strong>
 
                 <h2>
                   {infrastructure.toiletHealth}%
@@ -1132,7 +1381,9 @@ export default function App() {
               </div>
 
               <div style={card}>
-                <strong>🗑️ Smart Dustbin</strong>
+                <strong>
+                  🗑️ Smart Dustbin
+                </strong>
 
                 <h2>
                   {infrastructure.dustbinLevel}%
@@ -1149,10 +1400,13 @@ export default function App() {
               </div>
 
               <div style={card}>
-                <strong>🌫️ Air Quality</strong>
+                <strong>
+                  🌫️ Air Quality
+                </strong>
 
                 <h2>
-                  AQI {infrastructure.airQuality}
+                  AQI{" "}
+                  {infrastructure.airQuality}
                 </h2>
 
                 <span
@@ -1197,9 +1451,10 @@ export default function App() {
                 </strong>
 
                 <p style={muted}>
-                  Platform 3 is expected to
-                  exceed safe capacity during
-                  evening peak hours.
+                  Platform 3 is expected
+                  to exceed safe capacity
+                  during evening peak
+                  hours.
                 </p>
 
                 <b
@@ -1222,8 +1477,9 @@ export default function App() {
                 </strong>
 
                 <p style={muted}>
-                  Waiting-area heat stress risk
-                  is increasing.
+                  Waiting-area heat
+                  stress risk is
+                  increasing.
                 </p>
 
                 <b
@@ -1242,12 +1498,14 @@ export default function App() {
                     color: "#a78bfa",
                   }}
                 >
-                  🔧 Predictive Maintenance
+                  🔧 Predictive
+                  Maintenance
                 </strong>
 
                 <p style={muted}>
-                  Cooling equipment requires
-                  preventive inspection.
+                  Cooling equipment
+                  requires preventive
+                  inspection.
                 </p>
 
                 <b
@@ -1271,7 +1529,8 @@ export default function App() {
                 marginTop: 0,
               }}
             >
-              🔄 BharatBus AI Response Workflow
+              🔄 BharatBus AI Response
+              Workflow
             </h3>
 
             <div
@@ -1283,35 +1542,68 @@ export default function App() {
               }}
             >
               {[
-                ["📹", "Detect", "Camera / IoT"],
-                ["🤖", "Analyze", "AI Engine"],
-                ["📊", "Predict", "SAS Analytics"],
-                ["🚨", "Act", "Authority Alert"],
-                ["✅", "Verify", "AI Verification"],
-              ].map(([icon, title, subtitle]) => (
-                <div
-                  key={title}
-                  style={{
-                    ...card,
-                    textAlign: "center",
-                    padding: "15px 8px",
-                  }}
-                >
+                [
+                  "📹",
+                  "Detect",
+                  "Camera / IoT",
+                ],
+                [
+                  "🤖",
+                  "Analyze",
+                  "AI Engine",
+                ],
+                [
+                  "📊",
+                  "Predict",
+                  "SAS Analytics",
+                ],
+                [
+                  "🚨",
+                  "Act",
+                  "Authority Alert",
+                ],
+                [
+                  "✅",
+                  "Verify",
+                  "AI Verification",
+                ],
+              ].map(
+                ([
+                  icon,
+                  title,
+                  subtitle,
+                ]) => (
                   <div
+                    key={title}
                     style={{
-                      fontSize: "27px",
+                      ...card,
+                      textAlign:
+                        "center",
+                      padding:
+                        "15px 8px",
                     }}
                   >
-                    {icon}
+                    <div
+                      style={{
+                        fontSize:
+                          "27px",
+                      }}
+                    >
+                      {icon}
+                    </div>
+
+                    <strong>
+                      {title}
+                    </strong>
+
+                    <br />
+
+                    <small style={muted}>
+                      {subtitle}
+                    </small>
                   </div>
-
-                  <strong>{title}</strong>
-
-                  <small style={muted}>
-                    {subtitle}
-                  </small>
-                </div>
-              ))}
+                )
+              )}
             </div>
           </section>
 
@@ -1321,7 +1613,8 @@ export default function App() {
             <div
               style={{
                 display: "flex",
-                justifyContent: "space-between",
+                justifyContent:
+                  "space-between",
                 flexWrap: "wrap",
                 gap: "10px",
               }}
@@ -1332,7 +1625,8 @@ export default function App() {
                   margin: 0,
                 }}
               >
-                📊 Passenger Crowd Analytics
+                📊 Passenger Crowd
+                Analytics
               </h3>
 
               <span style={muted}>
@@ -1351,7 +1645,9 @@ export default function App() {
                 width="100%"
                 height="100%"
               >
-                <LineChart data={crowdData}>
+                <LineChart
+                  data={crowdData}
+                >
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke="#374151"
@@ -1368,8 +1664,10 @@ export default function App() {
 
                   <Tooltip
                     contentStyle={{
-                      background: "#1f2937",
-                      border: "1px solid #374151",
+                      background:
+                        "#1f2937",
+                      border:
+                        "1px solid #374151",
                       color: "#fff",
                     }}
                   />
@@ -1386,6 +1684,100 @@ export default function App() {
             </div>
           </section>
 
+          {/* LIVE TELEMETRY */}
+
+          <section style={section}>
+            <h3
+              style={{
+                color: "#38bdf8",
+                marginTop: 0,
+              }}
+            >
+              📡 Live AI Telemetry
+            </h3>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit,minmax(180px,1fr))",
+                gap: "12px",
+              }}
+            >
+              <div style={card}>
+                <span style={muted}>
+                  Total Crowd
+                </span>
+
+                <h2
+                  style={{
+                    margin:
+                      "6px 0",
+                    color:
+                      "#34d399",
+                  }}
+                >
+                  {Number(
+                    telemetry.total_crowd ||
+                      0
+                  ).toLocaleString()}
+                </h2>
+
+                <small style={muted}>
+                  Real-time API data
+                </small>
+              </div>
+
+              <div style={card}>
+                <span style={muted}>
+                  Average Score
+                </span>
+
+                <h2
+                  style={{
+                    margin:
+                      "6px 0",
+                    color:
+                      "#38bdf8",
+                  }}
+                >
+                  {Number(
+                    telemetry.avg_score ||
+                      0
+                  ).toFixed(1)}
+                </h2>
+
+                <small style={muted}>
+                  AI quality score
+                </small>
+              </div>
+
+              <div style={card}>
+                <span style={muted}>
+                  Booked Tickets
+                </span>
+
+                <h2
+                  style={{
+                    margin:
+                      "6px 0",
+                    color:
+                      "#a78bfa",
+                  }}
+                >
+                  {Number(
+                    telemetry.booked_count ||
+                      0
+                  ).toLocaleString()}
+                </h2>
+
+                <small style={muted}>
+                  Backend records
+                </small>
+              </div>
+            </div>
+          </section>
+
           {/* NATIONAL VISION */}
 
           <section style={section}>
@@ -1395,7 +1787,8 @@ export default function App() {
                 marginTop: 0,
               }}
             >
-              🇮🇳 National Deployment Vision
+              🇮🇳 National Deployment
+              Vision
             </h3>
 
             <div
@@ -1407,36 +1800,52 @@ export default function App() {
               }}
             >
               <div style={card}>
-                <h3>🚌 Transport</h3>
+                <h3>
+                  🚌 Transport
+                </h3>
+
                 <p style={muted}>
-                  Monitor buses, routes, crowd
-                  levels and passenger demand.
+                  Monitor buses, routes,
+                  crowd levels and
+                  passenger demand.
                 </p>
               </div>
 
               <div style={card}>
-                <h3>🏢 Infrastructure</h3>
+                <h3>
+                  🏢 Infrastructure
+                </h3>
+
                 <p style={muted}>
-                  Monitor cleanliness, toilets,
-                  water, lighting and waiting
+                  Monitor cleanliness,
+                  toilets, water,
+                  lighting and waiting
                   areas.
                 </p>
               </div>
 
               <div style={card}>
-                <h3>🧠 AI + SAS</h3>
+                <h3>
+                  🧠 AI + SAS
+                </h3>
+
                 <p style={muted}>
-                  Predict problems before they
-                  become major public-service
+                  Predict problems
+                  before they become
+                  major public-service
                   failures.
                 </p>
               </div>
 
               <div style={card}>
-                <h3>🚨 Government Action</h3>
+                <h3>
+                  🚨 Government Action
+                </h3>
+
                 <p style={muted}>
-                  Convert AI alerts into
-                  maintenance and authority
+                  Convert AI alerts
+                  into maintenance
+                  and authority
                   actions.
                 </p>
               </div>
@@ -1455,12 +1864,15 @@ export default function App() {
           >
             <b>BharatBus AI</b>
             <br />
-            AI + IoT + SAS Powered Public
-            Transport Infrastructure Intelligence
+            AI + IoT + SAS Powered
+            Public Transport
+            Infrastructure Intelligence
             <br />
-            Prototype data is simulated until
-            live IoT/CCTV infrastructure is
-            connected.
+            Production backend:
+            {API_BASE}
+            <br />
+            Live telemetry polling
+            enabled.
           </footer>
         </div>
       )}
