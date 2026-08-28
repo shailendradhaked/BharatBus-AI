@@ -1,65 +1,197 @@
-import cv2
-import requests
+import os
 import time
+import requests
 
-API_URL = "http://127.0.0.1:8000/api/v1/telemetry/process"
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
-def start_camera_monitoring():
-    cap = cv2.VideoCapture(0)
+
+BACKEND_URL = os.getenv(
+    "BHARATBUS_BACKEND_URL",
+    "http://127.0.0.1:8000"
+)
+
+STATION_ID = os.getenv(
+    "BHARATBUS_STATION_ID",
+    "JAIPUR-MAIN-PL3"
+)
+
+SEND_EVERY = float(
+    os.getenv(
+        "VISION_SEND_INTERVAL",
+        "5"
+    )
+)
+
+
+def send_telemetry(
+    passenger_count,
+    temperature=35,
+    water=70,
+    dustbin=40,
+):
+
+    url = (
+        f"{BACKEND_URL.rstrip('/')}"
+        "/api/v1/telemetry/process"
+    )
+
+    payload = {
+        "station_id": STATION_ID,
+        "water_tank_level_pct": water,
+        "ambient_temp_c": temperature,
+        "dustbin_fill_pct": dustbin,
+        "platform_crowd_count":
+            int(passenger_count),
+    }
+
+    response = requests.post(
+        url,
+        json=payload,
+        timeout=8,
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+def start_camera_monitoring(
+    camera_index=0
+):
+
+    if cv2 is None:
+
+        raise RuntimeError(
+            "Install OpenCV and requests:\n"
+            "pip install opencv-python requests"
+        )
+
+    cap = cv2.VideoCapture(
+        camera_index
+    )
 
     if not cap.isOpened():
-        print("Error: Camera feed not available.")
-        return
 
-    print("BharatBus AI - Starting CCTV Feed... Press 'q' to stop.")
-    last_api_call = time.time()
+        raise RuntimeError(
+            "Camera feed not available."
+        )
+
+    hog = cv2.HOGDescriptor()
+
+    hog.setSVMDetector(
+        cv2.HOGDescriptor_getDefaultPeopleDetector()
+    )
+
+    print(
+        "🇮🇳 BharatBus AI CCTV started."
+    )
+
+    print(
+        "Press Q to stop."
+    )
+
+    last_api_call = 0
 
     while True:
-        ret, frame = cap.read()
-        if not ret:
+
+        ok, frame = cap.read()
+
+        if not ok:
             break
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        _, thresh = cv2.threshold(blur, 60, 255, cv2.THRESH_BINARY)
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        boxes, weights = (
+            hog.detectMultiScale(
+                frame,
+                winStride=(8, 8),
+                padding=(8, 8),
+                scale=1.05,
+            )
+        )
 
-        passenger_count = sum(1 for c in contours if cv2.contourArea(c) > 700)
+        people = [
+            (box, weight)
+            for box, weight
+            in zip(boxes, weights)
+            if float(weight) >= 0.25
+        ]
 
-        for c in contours:
-            if cv2.contourArea(c) > 700:
-                x, y, w, h = cv2.boundingRect(c)
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        for (
+            x,
+            y,
+            w,
+            h
+        ), weight in people:
 
-        cv2.putText(frame, f"BharatBus AI Crowd Count: {passenger_count}", (20, 40),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-        
-        cv2.imshow("Jaipur Bus Terminal - Live CCTV Feed", frame)
+            cv2.rectangle(
+                frame,
+                (x, y),
+                (x + w, y + h),
+                (0, 220, 80),
+                2,
+            )
 
-        if time.time() - last_api_call > 5:
-            payload = {
-                "station_id": "JAIPUR-MAIN-PL3",
-                "water_tank_level_pct": 35.0,
-                "ambient_temp_c": 37.5,
-                "dustbin_fill_pct": 75.0,
-                "platform_crowd_count": passenger_count
-            }
+        count = len(people)
+
+        cv2.putText(
+            frame,
+            f"BharatBus AI | Crowd: {count}",
+            (20, 40),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (30, 180, 255),
+            2,
+        )
+
+        if (
+            time.time() - last_api_call
+            >= SEND_EVERY
+        ):
+
             try:
-                res = requests.post(API_URL, json=payload)
-                data = res.json()
-                score = data["data"]["bharat_infrastructure_score"]
-                status = data["data"]["health_status"]
-                print(f"[LIVE SYNC] Station Score: {score}/100 | Status: {status}")
-            except Exception as e:
-                print(f"[SYNC ERROR]: {e}")
-            
+
+                result = send_telemetry(
+                    count
+                )
+
+                data = result["data"]
+
+                print(
+                    f"[LIVE] "
+                    f"Crowd={count} | "
+                    f"Score="
+                    f"{data['bharat_infrastructure_score']} | "
+                    f"Status="
+                    f"{data['health_status']}"
+                )
+
+            except Exception as error:
+
+                print(
+                    "[SYNC ERROR]",
+                    error
+                )
+
             last_api_call = time.time()
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        cv2.imshow(
+            "BharatBus AI - Live CCTV",
+            frame
+        )
+
+        if (
+            cv2.waitKey(1) & 0xFF
+            == ord("q")
+        ):
             break
 
     cap.release()
+
     cv2.destroyAllWindows()
 
+
 if __name__ == "__main__":
+
     start_camera_monitoring()
