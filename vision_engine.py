@@ -1,195 +1,215 @@
 import os
 import time
+
+import cv2
 import requests
 
-try:
-    import cv2
-except ImportError:
-    cv2 = None
 
+# ============================================================
+# RENDER BACKEND
+# ============================================================
 
-BACKEND_URL = os.getenv(
-    "BHARATBUS_BACKEND_URL",
-    "http://127.0.0.1:8000"
+API_URL = os.getenv(
+    "BHARATBUS_API_URL",
+    "https://bharatbus-ai.onrender.com/api/v1/telemetry/process"
 )
 
 STATION_ID = os.getenv(
     "BHARATBUS_STATION_ID",
-    "JAIPUR-MAIN-PL3"
-)
-
-SEND_EVERY = float(
-    os.getenv(
-        "VISION_SEND_INTERVAL",
-        "5"
-    )
+    "JAIPUR-MAIN-PLATFORM-01"
 )
 
 
-def send_telemetry(
-    passenger_count,
-    temperature=35,
-    water=70,
-    dustbin=40,
-):
+# ============================================================
+# CAMERA MONITORING
+# ============================================================
 
-    url = (
-        f"{BACKEND_URL.rstrip('/')}"
-        "/api/v1/telemetry/process"
-    )
+def start_camera_monitoring():
 
-    payload = {
-        "station_id": STATION_ID,
-        "water_tank_level_pct": water,
-        "ambient_temp_c": temperature,
-        "dustbin_fill_pct": dustbin,
-        "platform_crowd_count":
-            int(passenger_count),
-    }
-
-    response = requests.post(
-        url,
-        json=payload,
-        timeout=8,
-    )
-
-    response.raise_for_status()
-
-    return response.json()
-
-
-def start_camera_monitoring(
-    camera_index=0
-):
-
-    if cv2 is None:
-
-        raise RuntimeError(
-            "Install OpenCV and requests:\n"
-            "pip install opencv-python requests"
-        )
-
-    cap = cv2.VideoCapture(
-        camera_index
-    )
+    cap = cv2.VideoCapture(0)
 
     if not cap.isOpened():
 
-        raise RuntimeError(
-            "Camera feed not available."
+        print(
+            "ERROR: Camera feed not available."
         )
 
-    hog = cv2.HOGDescriptor()
-
-    hog.setSVMDetector(
-        cv2.HOGDescriptor_getDefaultPeopleDetector()
-    )
+        return
 
     print(
         "🇮🇳 BharatBus AI CCTV started."
     )
 
     print(
-        "Press Q to stop."
+        f"Station: {STATION_ID}"
+    )
+
+    print(
+        f"Backend: {API_URL}"
     )
 
     last_api_call = 0
 
-    while True:
+    try:
 
-        ok, frame = cap.read()
+        while True:
 
-        if not ok:
-            break
+            ret, frame = cap.read()
 
-        boxes, weights = (
-            hog.detectMultiScale(
+            if not ret:
+                break
+
+            # ------------------------------------------------
+            # Basic Computer Vision
+            # ------------------------------------------------
+
+            gray = cv2.cvtColor(
                 frame,
-                winStride=(8, 8),
-                padding=(8, 8),
-                scale=1.05,
-            )
-        )
-
-        people = [
-            (box, weight)
-            for box, weight
-            in zip(boxes, weights)
-            if float(weight) >= 0.25
-        ]
-
-        for (
-            x,
-            y,
-            w,
-            h
-        ), weight in people:
-
-            cv2.rectangle(
-                frame,
-                (x, y),
-                (x + w, y + h),
-                (0, 220, 80),
-                2,
+                cv2.COLOR_BGR2GRAY
             )
 
-        count = len(people)
+            blur = cv2.GaussianBlur(
+                gray,
+                (5, 5),
+                0
+            )
 
-        cv2.putText(
-            frame,
-            f"BharatBus AI | Crowd: {count}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.8,
-            (30, 180, 255),
-            2,
-        )
+            _, thresh = cv2.threshold(
+                blur,
+                60,
+                255,
+                cv2.THRESH_BINARY
+            )
 
-        if (
-            time.time() - last_api_call
-            >= SEND_EVERY
-        ):
+            contours, _ = cv2.findContours(
+                thresh,
+                cv2.RETR_EXTERNAL,
+                cv2.CHAIN_APPROX_SIMPLE
+            )
 
-            try:
+            passenger_count = 0
 
-                result = send_telemetry(
-                    count
+            for contour in contours:
+
+                area = cv2.contourArea(
+                    contour
                 )
 
-                data = result["data"]
+                if area > 700:
 
-                print(
-                    f"[LIVE] "
-                    f"Crowd={count} | "
-                    f"Score="
-                    f"{data['bharat_infrastructure_score']} | "
-                    f"Status="
-                    f"{data['health_status']}"
-                )
+                    passenger_count += 1
 
-            except Exception as error:
+                    x, y, w, h = cv2.boundingRect(
+                        contour
+                    )
 
-                print(
-                    "[SYNC ERROR]",
-                    error
-                )
+                    cv2.rectangle(
+                        frame,
+                        (x, y),
+                        (x + w, y + h),
+                        (0, 255, 0),
+                        2
+                    )
 
-            last_api_call = time.time()
+            # ------------------------------------------------
+            # Display
+            # ------------------------------------------------
 
-        cv2.imshow(
-            "BharatBus AI - Live CCTV",
-            frame
-        )
+            cv2.putText(
+                frame,
+                f"BharatBus AI Crowd: {passenger_count}",
+                (20, 40),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 0, 255),
+                2
+            )
 
-        if (
-            cv2.waitKey(1) & 0xFF
-            == ord("q")
-        ):
-            break
+            cv2.imshow(
+                "BharatBus AI - CCTV",
+                frame
+            )
 
-    cap.release()
+            # ------------------------------------------------
+            # Send telemetry every 5 seconds
+            # ------------------------------------------------
 
-    cv2.destroyAllWindows()
+            if time.time() - last_api_call >= 5:
+
+                payload = {
+
+                    "station_id": STATION_ID,
+
+                    "water_tank_level_pct": 35.0,
+
+                    "ambient_temp_c": 37.5,
+
+                    "dustbin_fill_pct": 75.0,
+
+                    "platform_crowd_count":
+                        passenger_count
+                }
+
+                try:
+
+                    response = requests.post(
+                        API_URL,
+                        json=payload,
+                        timeout=10
+                    )
+
+                    if response.ok:
+
+                        result = response.json()
+
+                        score = result[
+                            "data"
+                        ][
+                            "bharat_infrastructure_score"
+                        ]
+
+                        status = result[
+                            "data"
+                        ][
+                            "health_status"
+                        ]
+
+                        print(
+                            f"[LIVE AI] "
+                            f"Score={score}/100 "
+                            f"Status={status} "
+                            f"Crowd={passenger_count}"
+                        )
+
+                    else:
+
+                        print(
+                            "API ERROR:",
+                            response.status_code
+                        )
+
+                except Exception as error:
+
+                    print(
+                        "SYNC ERROR:",
+                        error
+                    )
+
+                last_api_call = time.time()
+
+            # ------------------------------------------------
+            # Quit
+            # ------------------------------------------------
+
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+
+                break
+
+    finally:
+
+        cap.release()
+
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
