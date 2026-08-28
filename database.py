@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 # ============================================================
@@ -42,9 +42,9 @@ def init_db():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # --------------------------------------------------------
+    # ========================================================
     # ROUTES
-    # --------------------------------------------------------
+    # ========================================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS routes (
@@ -56,9 +56,9 @@ def init_db():
         )
     """)
 
-    # --------------------------------------------------------
+    # ========================================================
     # TICKETS
-    # --------------------------------------------------------
+    # ========================================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tickets (
@@ -71,44 +71,70 @@ def init_db():
         )
     """)
 
-    # --------------------------------------------------------
+    # ========================================================
     # TELEMETRY
-    # --------------------------------------------------------
+    # ========================================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS telemetry (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+
             timestamp TEXT,
+
             station_id TEXT,
+
             score REAL,
+
             status TEXT,
-            crowd_count INTEGER,
+
+            crowd_count INTEGER DEFAULT 0,
+
             water_level REAL DEFAULT 0,
+
             temperature REAL DEFAULT 0,
-            dustbin_level REAL DEFAULT 0
+
+            dustbin_level REAL DEFAULT 0,
+
+            ai_risk_score REAL DEFAULT 0,
+
+            ai_risk_status TEXT,
+
+            people_detected INTEGER DEFAULT 0,
+
+            vehicles_detected INTEGER DEFAULT 0,
+
+            garbage_detected INTEGER DEFAULT 0
         )
     """)
 
-    # --------------------------------------------------------
+    # ========================================================
     # ALERTS
-    # --------------------------------------------------------
+    # ========================================================
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS alerts (
+
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+
             timestamp TEXT,
+
             station_id TEXT,
+
             alert_type TEXT,
+
             severity TEXT,
+
             description TEXT,
+
             action TEXT,
+
             resolved INTEGER DEFAULT 0
         )
     """)
 
-    # --------------------------------------------------------
+    # ========================================================
     # DEFAULT ROUTES
-    # --------------------------------------------------------
+    # ========================================================
 
     cursor.execute(
         "SELECT COUNT(*) FROM routes"
@@ -152,7 +178,12 @@ def init_db():
         cursor.executemany(
             """
             INSERT INTO routes
-            (source, destination, fare, bus_no)
+            (
+                source,
+                destination,
+                fare,
+                bus_no
+            )
             VALUES (?, ?, ?, ?)
             """,
             default_routes
@@ -172,7 +203,12 @@ def get_routes_db():
     cursor = conn.cursor()
 
     cursor.execute("""
-        SELECT id, source, destination, fare, bus_no
+        SELECT
+            id,
+            source,
+            destination,
+            fare,
+            bus_no
         FROM routes
         ORDER BY id
     """)
@@ -188,7 +224,7 @@ def get_routes_db():
 
 
 # ============================================================
-# TICKET
+# CREATE TICKET
 # ============================================================
 
 def create_ticket(
@@ -198,7 +234,9 @@ def create_ticket(
     amount
 ):
 
-    timestamp = datetime.now().strftime(
+    timestamp = datetime.now(
+        timezone.utc
+    ).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
 
@@ -210,7 +248,14 @@ def create_ticket(
     cursor.execute(
         """
         INSERT INTO tickets
-        (id, name, route, amount, status, time)
+        (
+            id,
+            name,
+            route,
+            amount,
+            status,
+            time
+        )
         VALUES (?, ?, ?, ?, ?, ?)
         """,
         (
@@ -227,12 +272,24 @@ def create_ticket(
     conn.close()
 
     return {
-        "ticket_id": ticket_id,
-        "name": name,
-        "route": route,
-        "amount": amount,
-        "status": status,
-        "time": timestamp,
+
+        "ticket_id":
+            ticket_id,
+
+        "name":
+            name,
+
+        "route":
+            route,
+
+        "amount":
+            amount,
+
+        "status":
+            status,
+
+        "time":
+            timestamp,
     }
 
 
@@ -256,19 +313,86 @@ def save_telemetry(data):
             crowd_count,
             water_level,
             temperature,
-            dustbin_level
+            dustbin_level,
+            ai_risk_score,
+            ai_risk_status,
+            people_detected,
+            vehicles_detected,
+            garbage_detected
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            data.get("timestamp"),
-            data.get("station_id"),
-            data.get("score"),
-            data.get("status"),
-            data.get("crowd_count"),
-            data.get("water_level", 0),
-            data.get("temperature", 0),
-            data.get("dustbin_level", 0),
+
+            data.get(
+                "timestamp"
+            ),
+
+            data.get(
+                "station_id"
+            ),
+
+            data.get(
+                "score",
+                0
+            ),
+
+            data.get(
+                "status",
+                "UNKNOWN"
+            ),
+
+            data.get(
+                "crowd_count",
+                0
+            ),
+
+            data.get(
+                "water_level",
+                0
+            ),
+
+            data.get(
+                "temperature",
+                0
+            ),
+
+            data.get(
+                "dustbin_level",
+                0
+            ),
+
+            data.get(
+                "ai_risk_score",
+                0
+            ),
+
+            data.get(
+                "ai_risk_status",
+                "LOW"
+            ),
+
+            data.get(
+                "people_detected",
+                data.get(
+                    "crowd_count",
+                    0
+                )
+            ),
+
+            data.get(
+                "vehicles_detected",
+                0
+            ),
+
+            int(
+                bool(
+                    data.get(
+                        "garbage_detected",
+                        False
+                    )
+                )
+            ),
         )
     )
 
@@ -291,9 +415,41 @@ def save_alerts(
     conn = get_connection()
     cursor = conn.cursor()
 
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.now(
+        timezone.utc
+    ).isoformat()
 
     for alert in alerts:
+
+        # Safely support AI alerts
+        alert_type = alert.get(
+            "alert_type",
+            alert.get(
+                "type",
+                "AI_ALERT"
+            )
+        )
+
+        severity = alert.get(
+            "severity",
+            "MEDIUM"
+        )
+
+        description = alert.get(
+            "description",
+            alert.get(
+                "message",
+                "AI detected an infrastructure issue."
+            )
+        )
+
+        action = alert.get(
+            "action",
+            alert.get(
+                "recommendation",
+                "Review and take appropriate action."
+            )
+        )
 
         cursor.execute(
             """
@@ -311,10 +467,10 @@ def save_alerts(
             (
                 timestamp,
                 station_id,
-                alert["alert_type"],
-                alert["severity"],
-                alert["description"],
-                alert["action"],
+                alert_type,
+                severity,
+                description,
+                action,
             )
         )
 
@@ -330,6 +486,14 @@ def get_recent_telemetry(
     limit=20
 ):
 
+    limit = max(
+        1,
+        min(
+            int(limit),
+            100
+        )
+    )
+
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -343,7 +507,12 @@ def get_recent_telemetry(
             crowd_count,
             water_level,
             temperature,
-            dustbin_level
+            dustbin_level,
+            ai_risk_score,
+            ai_risk_status,
+            people_detected,
+            vehicles_detected,
+            garbage_detected
         FROM telemetry
         ORDER BY id DESC
         LIMIT ?
@@ -361,9 +530,107 @@ def get_recent_telemetry(
     ]
 
     return {
-        "success": True,
-        "history": history,
+
+        "success":
+            True,
+
+        "count":
+            len(history),
+
+        "history":
+            history,
     }
+
+
+# ============================================================
+# LATEST STATION TELEMETRY
+# ============================================================
+
+def get_latest_station_data():
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT
+            timestamp,
+            station_id,
+            score,
+            status,
+            crowd_count,
+            water_level,
+            temperature,
+            dustbin_level,
+            ai_risk_score,
+            ai_risk_status,
+            people_detected,
+            vehicles_detected,
+            garbage_detected
+        FROM telemetry
+        WHERE id IN (
+            SELECT MAX(id)
+            FROM telemetry
+            GROUP BY station_id
+        )
+        ORDER BY station_id
+    """)
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return [
+        dict(row)
+        for row in rows
+    ]
+
+
+# ============================================================
+# ACTIVE ALERTS
+# ============================================================
+
+def get_active_alerts(
+    limit=20
+):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            timestamp,
+            station_id,
+            alert_type,
+            severity,
+            description,
+            action,
+            resolved
+        FROM alerts
+        WHERE resolved = 0
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (
+            max(
+                1,
+                min(
+                    int(limit),
+                    100
+                )
+            ),
+        )
+    )
+
+    rows = cursor.fetchall()
+
+    conn.close()
+
+    return [
+        dict(row)
+        for row in rows
+    ]
 
 
 # ============================================================
@@ -375,9 +642,16 @@ def get_dashboard_summary():
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Crowd
+    # ========================================================
+    # CURRENT CROWD
+    # ========================================================
+
     cursor.execute("""
-        SELECT COALESCE(SUM(crowd_count), 0)
+        SELECT
+            COALESCE(
+                SUM(crowd_count),
+                0
+            )
         FROM telemetry
         WHERE id IN (
             SELECT MAX(id)
@@ -386,57 +660,215 @@ def get_dashboard_summary():
         )
     """)
 
-    total_crowd = cursor.fetchone()[0] or 0
+    total_crowd = (
+        cursor.fetchone()[0]
+        or 0
+    )
 
-    # Score
+    # ========================================================
+    # AVERAGE SCORE
+    # ========================================================
+
     cursor.execute("""
         SELECT AVG(score)
         FROM telemetry
     """)
 
-    avg_score = cursor.fetchone()[0]
+    avg_score = (
+        cursor.fetchone()[0]
+    )
 
     if avg_score is None:
+
         avg_score = 65.4
 
-    # Tickets
+    # ========================================================
+    # TICKETS
+    # ========================================================
+
     cursor.execute("""
         SELECT COUNT(*)
         FROM tickets
     """)
 
-    booked_count = cursor.fetchone()[0]
+    booked_count = (
+        cursor.fetchone()[0]
+    )
 
-    # Active alerts
+    # ========================================================
+    # ACTIVE ALERTS
+    # ========================================================
+
     cursor.execute("""
         SELECT COUNT(*)
         FROM alerts
         WHERE resolved = 0
     """)
 
-    active_alerts = cursor.fetchone()[0]
+    active_alerts = (
+        cursor.fetchone()[0]
+    )
 
-    # Stations
+    # ========================================================
+    # STATIONS
+    # ========================================================
+
     cursor.execute("""
-        SELECT COUNT(DISTINCT station_id)
+        SELECT COUNT(
+            DISTINCT station_id
+        )
         FROM telemetry
     """)
 
-    stations_monitored = cursor.fetchone()[0]
+    stations_monitored = (
+        cursor.fetchone()[0]
+    )
+
+    # ========================================================
+    # AI RISK
+    # ========================================================
+
+    cursor.execute("""
+        SELECT AVG(ai_risk_score)
+        FROM telemetry
+        WHERE ai_risk_score > 0
+    """)
+
+    avg_ai_risk = (
+        cursor.fetchone()[0]
+    )
+
+    if avg_ai_risk is None:
+
+        avg_ai_risk = 0
+
+    # ========================================================
+    # PEOPLE DETECTED
+    # ========================================================
+
+    cursor.execute("""
+        SELECT COALESCE(
+            SUM(people_detected),
+            0
+        )
+        FROM telemetry
+        WHERE id IN (
+            SELECT MAX(id)
+            FROM telemetry
+            GROUP BY station_id
+        )
+    """)
+
+    people_detected = (
+        cursor.fetchone()[0]
+        or 0
+    )
+
+    # ========================================================
+    # VEHICLES DETECTED
+    # ========================================================
+
+    cursor.execute("""
+        SELECT COALESCE(
+            SUM(vehicles_detected),
+            0
+        )
+        FROM telemetry
+        WHERE id IN (
+            SELECT MAX(id)
+            FROM telemetry
+            GROUP BY station_id
+        )
+    """)
+
+    vehicles_detected = (
+        cursor.fetchone()[0]
+        or 0
+    )
 
     conn.close()
 
-    # Demo fallback
+    # ========================================================
+    # DEMO FALLBACK
+    # ========================================================
+
     if total_crowd == 0:
+
         total_crowd = 1280
 
     if stations_monitored == 0:
+
         stations_monitored = 4
 
+    # ========================================================
+    # FINAL SUMMARY
+    # ========================================================
+
     return {
-        "total_crowd": int(total_crowd),
-        "avg_score": round(float(avg_score), 2),
-        "booked_count": int(booked_count),
-        "active_alerts": int(active_alerts),
-        "stations_monitored": int(stations_monitored),
+
+        "total_crowd":
+            int(total_crowd),
+
+        "avg_score":
+            round(
+                float(avg_score),
+                2
+            ),
+
+        "booked_count":
+            int(booked_count),
+
+        "active_alerts":
+            int(active_alerts),
+
+        "stations_monitored":
+            int(stations_monitored),
+
+        "avg_ai_risk":
+            round(
+                float(avg_ai_risk),
+                2
+            ),
+
+        "people_detected":
+            int(people_detected),
+
+        "vehicles_detected":
+            int(vehicles_detected),
+
+        "database":
+            "SQLite",
+
+        "analytics":
+            "AI + SAS-ready",
     }
+
+
+# ============================================================
+# RESOLVE ALERT
+# ============================================================
+
+def resolve_alert(
+    alert_id
+):
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        UPDATE alerts
+        SET resolved = 1
+        WHERE id = ?
+        """,
+        (
+            alert_id,
+        )
+    )
+
+    updated = cursor.rowcount
+
+    conn.commit()
+    conn.close()
+
+    return updated > 0
