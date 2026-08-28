@@ -1,12 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   MapContainer,
   TileLayer,
   Marker,
-  Popup
-} from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
+  Popup,
+} from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import L from "leaflet";
 
 import {
   LineChart,
@@ -15,9 +15,14 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  CartesianGrid
-} from 'recharts';
+  CartesianGrid,
+} from "recharts";
 
+// ============================================================
+// PRODUCTION BACKEND
+// ============================================================
+
+const API_URL = "https://bharatbus-ai.onrender.com";
 
 // ============================================================
 // LEAFLET MARKER FIX
@@ -27,32 +32,26 @@ delete L.Icon.Default.prototype._getIconUrl;
 
 L.Icon.Default.mergeOptions({
   iconRetinaUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
   iconUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
   shadowUrl:
-    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png'
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-
 // ============================================================
-// DEMO CHART DATA
+// DEMO ANALYTICS DATA
 // ============================================================
 
-const chartData = [
-  { time: '10:00 AM', crowd: 400 },
-  { time: '11:00 AM', crowd: 850 },
-  { time: '12:00 PM', crowd: 1200 },
-  { time: '01:00 PM', crowd: 950 },
-  { time: '02:00 PM', crowd: 1400 }
+const crowdData = [
+  { time: "10 AM", crowd: 400 },
+  { time: "11 AM", crowd: 850 },
+  { time: "12 PM", crowd: 1200 },
+  { time: "1 PM", crowd: 950 },
+  { time: "2 PM", crowd: 1400 },
+  { time: "3 PM", crowd: 1250 },
+  { time: "4 PM", crowd: 1650 },
 ];
-
-
-// ============================================================
-// DEMO INFRASTRUCTURE DATA
-// ============================================================
 
 const infrastructure = {
   busStands: 248,
@@ -65,132 +64,84 @@ const infrastructure = {
   waterLevel: 74,
   toiletHealth: 41,
   dustbinLevel: 92,
-  airQuality: 118
+  airQuality: 118,
 };
-
 
 // ============================================================
 // STYLES
 // ============================================================
 
-const cardStyle = {
-  backgroundColor: '#111827',
-  border: '1px solid #374151',
-  borderRadius: '10px',
-  padding: '20px',
-  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+const card = {
+  background: "#111827",
+  border: "1px solid #374151",
+  borderRadius: "12px",
+  padding: "18px",
+  boxShadow: "0 5px 15px rgba(0,0,0,0.18)",
 };
 
-const labelStyle = {
-  margin: '0 0 7px',
-  color: '#9ca3af',
-  fontSize: '13px'
+const section = {
+  background: "#111827",
+  border: "1px solid #374151",
+  borderRadius: "12px",
+  padding: "20px",
+  marginBottom: "18px",
 };
 
-const valueStyle = {
-  margin: 0,
-  fontSize: '28px',
-  fontWeight: '800'
+const muted = {
+  color: "#9ca3af",
+  fontSize: "12px",
 };
 
-const mutedStyle = {
-  color: '#6b7280',
-  fontSize: '11px'
+const button = {
+  border: "none",
+  borderRadius: "7px",
+  padding: "10px 15px",
+  cursor: "pointer",
+  fontWeight: "700",
+  color: "#fff",
 };
-
-const sectionStyle = {
-  backgroundColor: '#111827',
-  border: '1px solid #374151',
-  borderRadius: '12px',
-  padding: '20px',
-  marginBottom: '18px'
-};
-
-const alertCard = (borderColor) => ({
-  backgroundColor: '#1f2937',
-  border: `1px solid ${borderColor}`,
-  borderRadius: '9px',
-  padding: '16px',
-  minHeight: '145px'
-});
-
-const insightCard = {
-  backgroundColor: '#1f2937',
-  border: '1px solid #374151',
-  borderRadius: '9px',
-  padding: '16px',
-  minHeight: '125px'
-};
-
-const workflowCard = {
-  backgroundColor: '#1f2937',
-  border: '1px solid #374151',
-  borderRadius: '9px',
-  padding: '14px 8px',
-  textAlign: 'center',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '5px'
-};
-
 
 // ============================================================
 // APP
 // ============================================================
 
 export default function App() {
-
-  // ----------------------------------------------------------
-  // NAVIGATION
-  // ----------------------------------------------------------
-
-  const [activeTab, setActiveTab] = useState('passenger');
-
-
-  // ----------------------------------------------------------
-  // PASSENGER
-  // ----------------------------------------------------------
+  const [activeTab, setActiveTab] = useState("passenger");
 
   const [routesList, setRoutesList] = useState([]);
-
   const [selectedRoute, setSelectedRoute] = useState(null);
 
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [passengerName, setPassengerName] = useState("");
 
-  const [passengerName, setPassengerName] = useState('');
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentStep, setPaymentStep] = useState("form");
 
-  const [paymentStep, setPaymentStep] = useState('form');
+  const [notification, setNotification] = useState("");
 
-  const [notification, setNotification] = useState(null);
+  const [backendStatus, setBackendStatus] = useState("Checking...");
 
   const [busPosition, setBusPosition] = useState([
     28.6139,
-    77.2090
+    77.209,
   ]);
-
-
-  // ----------------------------------------------------------
-  // ADMIN TELEMETRY
-  // ----------------------------------------------------------
 
   const [telemetry, setTelemetry] = useState({
     total_crowd: 1280,
     avg_score: 65.4,
-    booked_count: 5
+    booked_count: 5,
   });
-
 
   // ==========================================================
   // FETCH ROUTES
   // ==========================================================
 
   const fetchRoutes = async () => {
-
     try {
+      const response = await fetch(`${API_URL}/api/routes`);
 
-      const response = await fetch(
-        'http://localhost:8000/api/routes'
-      );
+      if (!response.ok) {
+        throw new Error("Routes API failed");
+      }
 
       const data = await response.json();
 
@@ -200,432 +151,358 @@ export default function App() {
         setSelectedRoute(data[0]);
       }
 
+      setBackendStatus("Online");
     } catch (error) {
+      console.error("Routes API:", error);
 
-      console.log(
-        'Backend unavailable. Using demo route.'
-      );
+      setBackendStatus("Online • Demo Mode");
 
       const fallbackRoute = {
         id: 1,
-        source: 'Kashmere Gate',
-        destination: 'Anand Vihar',
+        source: "Kashmere Gate",
+        destination: "Anand Vihar",
         fare: 30,
-        bus_no: 'DL-01-AI-4029'
+        bus_no: "DL-01-AI-4029",
       };
 
       setRoutesList([fallbackRoute]);
-
       setSelectedRoute(fallbackRoute);
     }
   };
-
 
   // ==========================================================
   // FETCH TELEMETRY
   // ==========================================================
 
   const fetchTelemetry = async () => {
-
     try {
-
       const response = await fetch(
-        'http://localhost:8000/api/telemetry'
+        `${API_URL}/api/telemetry`
       );
+
+      if (!response.ok) {
+        throw new Error("Telemetry API failed");
+      }
 
       const data = await response.json();
 
-      setTelemetry(data);
+      setTelemetry((previous) => ({
+        ...previous,
+        ...data,
+      }));
 
+      setBackendStatus("Online");
     } catch (error) {
-
-      console.log(
-        'Using demo telemetry data.'
-      );
-
+      console.error("Telemetry API:", error);
     }
   };
-
 
   // ==========================================================
   // INITIAL LOAD
   // ==========================================================
 
   useEffect(() => {
-
     fetchRoutes();
-
     fetchTelemetry();
 
+    const telemetryInterval = setInterval(() => {
+      fetchTelemetry();
+    }, 15000);
 
-    // Demo live GPS movement
     const gpsInterval = setInterval(() => {
-
       setBusPosition((previous) => [
-        previous[0] +
-          (Math.random() - 0.5) * 0.002,
-
-        previous[1] +
-          (Math.random() - 0.5) * 0.002
+        previous[0] + (Math.random() - 0.5) * 0.002,
+        previous[1] + (Math.random() - 0.5) * 0.002,
       ]);
-
     }, 4000);
 
-
-    return () => clearInterval(gpsInterval);
-
+    return () => {
+      clearInterval(telemetryInterval);
+      clearInterval(gpsInterval);
+    };
   }, []);
 
-
   // ==========================================================
-  // PAYMENT
+  // BOOK TICKET
   // ==========================================================
 
-  const handleVerifyUpiPayment = async () => {
-
+  const handlePayment = async () => {
     try {
-
       if (!selectedRoute) return;
 
       const response = await fetch(
-        'http://localhost:8000/api/book-ticket',
+        `${API_URL}/api/book-ticket`,
         {
-          method: 'POST',
-
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json'
+            "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
             name: passengerName,
-
-            route:
-              `${selectedRoute.source} ➔ ${selectedRoute.destination}`,
-
-            amount: selectedRoute.fare
-          })
+            route: `${selectedRoute.source} ➔ ${selectedRoute.destination}`,
+            amount: selectedRoute.fare,
+          }),
         }
       );
+
+      if (!response.ok) {
+        throw new Error("Booking API failed");
+      }
 
       const result = await response.json();
 
       setNotification(
-        `✅ ${result.message}`
+        `✅ ${result.message || "Ticket booked successfully"}`
       );
-
-      fetchTelemetry();
-
     } catch (error) {
+      console.error("Booking API:", error);
 
       setNotification(
-        '✅ Payment successful — Demo Simulation'
+        "✅ Payment successful — Demo Simulation"
       );
-
     }
 
-    setShowPaymentModal(false);
-
-    setPaymentStep('form');
-
-    setPassengerName('');
+    setShowPayment(false);
+    setPaymentStep("form");
+    setPassengerName("");
 
     setTimeout(() => {
-      setNotification(null);
+      setNotification("");
     }, 5000);
+
+    fetchTelemetry();
   };
 
-
   // ==========================================================
-  // UI
+  // APP
   // ==========================================================
 
   return (
-
     <div
       style={{
-        backgroundColor: '#0b0f19',
-        color: '#f3f4f6',
-        minHeight: '100vh',
-        padding: '20px',
-        fontFamily: 'Inter, Arial, sans-serif'
+        minHeight: "100vh",
+        background: "#0b0f19",
+        color: "#f3f4f6",
+        padding: "20px",
+        fontFamily: "Inter, Arial, sans-serif",
       }}
     >
-
-
       {/* ======================================================
           HEADER
       ====================================================== */}
 
       <header
         style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: '15px',
-          flexWrap: 'wrap',
-          borderBottom: '1px solid #1f2937',
-          paddingBottom: '15px',
-          marginBottom: '20px'
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "15px",
+          borderBottom: "1px solid #1f2937",
+          paddingBottom: "15px",
+          marginBottom: "20px",
         }}
       >
-
         <div>
-
           <h1
             style={{
               margin: 0,
-              color: '#38bdf8',
-              fontSize: '21px'
+              color: "#38bdf8",
+              fontSize: "22px",
             }}
           >
             🇮🇳 BharatBus AI
           </h1>
 
-          <div
+          <p
             style={{
-              color: '#6b7280',
-              fontSize: '10px',
-              marginTop: '4px'
+              margin: "5px 0 0",
+              color: "#9ca3af",
+              fontSize: "11px",
             }}
           >
-            Smart Public Transport Infrastructure Intelligence
-          </div>
-
+            AI-Powered Smart Public Transport Infrastructure
+          </p>
         </div>
-
 
         <div
           style={{
-            display: 'flex',
-            gap: '10px',
-            flexWrap: 'wrap'
+            display: "flex",
+            gap: "8px",
+            flexWrap: "wrap",
           }}
         >
-
           <button
-            onClick={() => setActiveTab('passenger')}
-
+            onClick={() => setActiveTab("passenger")}
             style={{
-              padding: '9px 15px',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              color: '#fff',
-              backgroundColor:
-                activeTab === 'passenger'
-                  ? '#0284c7'
-                  : '#1f2937'
+              ...button,
+              background:
+                activeTab === "passenger"
+                  ? "#0284c7"
+                  : "#1f2937",
             }}
           >
-            🎫 Passenger QR & Live Map
+            🎫 Passenger Portal
           </button>
-
 
           <button
-            onClick={() => setActiveTab('admin')}
-
+            onClick={() => setActiveTab("admin")}
             style={{
-              padding: '9px 15px',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              color: '#fff',
-              backgroundColor:
-                activeTab === 'admin'
-                  ? '#0284c7'
-                  : '#1f2937'
+              ...button,
+              background:
+                activeTab === "admin"
+                  ? "#0284c7"
+                  : "#1f2937",
             }}
           >
-            🏢 Smart Infrastructure
+            🏢 AI Command Center
           </button>
-
         </div>
-
       </header>
-
 
       {/* ======================================================
           NOTIFICATION
       ====================================================== */}
 
       {notification && (
-
         <div
           style={{
-            backgroundColor: '#065f46',
-            border: '1px solid #34d399',
-            color: '#ecfdf5',
-            padding: '12px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            textAlign: 'center',
-            fontWeight: 'bold'
+            background: "#065f46",
+            border: "1px solid #34d399",
+            padding: "12px",
+            borderRadius: "8px",
+            marginBottom: "18px",
+            textAlign: "center",
+            fontWeight: "bold",
           }}
         >
           {notification}
         </div>
-
       )}
-
 
       {/* ======================================================
           PASSENGER PORTAL
       ====================================================== */}
 
-      {activeTab === 'passenger' && (
-
+      {activeTab === "passenger" && (
         <div
           style={{
-            display: 'grid',
+            display: "grid",
             gridTemplateColumns:
-              'repeat(auto-fit, minmax(350px, 1fr))',
-            gap: '20px'
+              "repeat(auto-fit,minmax(350px,1fr))",
+            gap: "20px",
           }}
         >
-
-
           {/* BOOKING */}
 
-          <div style={sectionStyle}>
-
+          <div style={section}>
             <div
               style={{
-                textAlign: 'center',
-                marginBottom: '20px'
+                textAlign: "center",
+                marginBottom: "20px",
               }}
             >
-
               <span
                 style={{
-                  backgroundColor: '#065f46',
-                  color: '#34d399',
-                  padding: '5px 12px',
-                  borderRadius: '20px',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
+                  background: "#065f46",
+                  color: "#34d399",
+                  padding: "5px 12px",
+                  borderRadius: "20px",
+                  fontSize: "11px",
                 }}
               >
                 BUS #
                 {selectedRoute?.bus_no ||
-                  'DL-01-AI-4029'}
+                  "DL-01-AI-4029"}
               </span>
-
 
               <h2
                 style={{
-                  fontSize: '18px',
-                  margin: '10px 0 5px'
+                  fontSize: "18px",
+                  margin: "10px 0 5px",
                 }}
               >
                 {selectedRoute
                   ? `${selectedRoute.source} ➔ ${selectedRoute.destination}`
-                  : 'Select a Route'}
+                  : "Select a Route"}
               </h2>
 
-
-              <p
-                style={{
-                  color: '#9ca3af',
-                  fontSize: '12px'
-                }}
-              >
-                Select Route & UPI Payment Terminal
+              <p style={muted}>
+                Smart Ticketing + Live GPS
               </p>
-
             </div>
 
-
-            {/* ROUTE SELECT */}
+            {/* ROUTE */}
 
             <div
               style={{
-                backgroundColor: '#1f2937',
-                padding: '15px',
-                borderRadius: '8px',
-                marginBottom: '20px'
+                background: "#1f2937",
+                padding: "15px",
+                borderRadius: "8px",
+                marginBottom: "15px",
               }}
             >
-
               <label
                 style={{
-                  color: '#38bdf8',
-                  fontSize: '12px',
-                  fontWeight: 'bold'
+                  color: "#38bdf8",
+                  fontSize: "12px",
+                  fontWeight: "bold",
                 }}
               >
                 📍 Select Bus Route
               </label>
 
-
               <select
-                value={selectedRoute?.id || ''}
+                value={selectedRoute?.id || ""}
                 onChange={(event) => {
-
-                  const route =
-                    routesList.find(
-                      item =>
-                        String(item.id) ===
-                        event.target.value
-                    );
+                  const route = routesList.find(
+                    (item) =>
+                      String(item.id) ===
+                      event.target.value
+                  );
 
                   setSelectedRoute(route);
-
                 }}
-
                 style={{
-                  width: '100%',
-                  marginTop: '7px',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  backgroundColor: '#111827',
-                  color: '#fff',
-                  border: '1px solid #374151'
+                  width: "100%",
+                  marginTop: "8px",
+                  padding: "10px",
+                  background: "#111827",
+                  color: "#fff",
+                  border: "1px solid #374151",
+                  borderRadius: "6px",
                 }}
               >
-
-                {routesList.map(route => (
-
+                {routesList.map((route) => (
                   <option
                     key={route.id}
                     value={route.id}
                   >
-                    {route.source} to {route.destination}
-                    {' '}
-                    (₹{route.fare})
+                    {route.source} →{" "}
+                    {route.destination} — ₹
+                    {route.fare}
                   </option>
-
                 ))}
-
               </select>
-
             </div>
 
-
-            {/* PAYMENT */}
-
-            {!showPaymentModal ? (
-
+            {!showPayment ? (
               <div
                 style={{
-                  backgroundColor: '#1f2937',
-                  padding: '15px',
-                  borderRadius: '8px'
+                  background: "#1f2937",
+                  padding: "15px",
+                  borderRadius: "8px",
                 }}
               >
-
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    marginBottom: '15px'
+                    display: "flex",
+                    justifyContent: "space-between",
+                    marginBottom: "15px",
                   }}
                 >
-
                   <span>
-                    Fare:
-                    {' '}
+                    Fare:{" "}
                     <b>
                       ₹{selectedRoute?.fare || 30}
                     </b>
@@ -633,68 +510,49 @@ export default function App() {
 
                   <span
                     style={{
-                      color: '#34d399'
+                      color: "#34d399",
                     }}
                   >
-                    GPS: Online 🟢
+                    GPS 🟢
                   </span>
-
                 </div>
-
 
                 <button
                   onClick={() => {
-                    setShowPaymentModal(true);
-                    setPaymentStep('form');
+                    setShowPayment(true);
+                    setPaymentStep("form");
                   }}
-
                   style={{
-                    width: '100%',
-                    padding: '12px',
-                    backgroundColor: '#0284c7',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
+                    ...button,
+                    width: "100%",
+                    background: "#0284c7",
                   }}
                 >
-                  Book Ticket (UPI QR)
+                  Book Ticket — UPI QR
                 </button>
-
               </div>
-
-            ) : paymentStep === 'form' ? (
-
+            ) : paymentStep === "form" ? (
               <form
                 onSubmit={(event) => {
-
                   event.preventDefault();
 
-                  if (
-                    passengerName.trim()
-                  ) {
-                    setPaymentStep('qr');
+                  if (passengerName.trim()) {
+                    setPaymentStep("qr");
                   }
-
                 }}
-
                 style={{
-                  backgroundColor: '#1f2937',
-                  padding: '20px',
-                  borderRadius: '8px'
+                  background: "#1f2937",
+                  padding: "20px",
+                  borderRadius: "8px",
                 }}
               >
-
                 <h3
                   style={{
-                    color: '#38bdf8',
-                    fontSize: '15px'
+                    color: "#38bdf8",
                   }}
                 >
                   Passenger Details
                 </h3>
-
 
                 <input
                   value={passengerName}
@@ -703,632 +561,510 @@ export default function App() {
                       event.target.value
                     )
                   }
-
                   placeholder="Full Name"
-
                   required
-
                   style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    padding: '10px',
-                    backgroundColor: '#111827',
-                    border: '1px solid #374151',
-                    color: '#fff',
-                    borderRadius: '6px',
-                    marginBottom: '12px'
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "11px",
+                    background: "#111827",
+                    border: "1px solid #374151",
+                    color: "#fff",
+                    borderRadius: "6px",
+                    marginBottom: "12px",
                   }}
                 />
 
-
-                <div
+                <button
+                  type="submit"
                   style={{
-                    display: 'flex',
-                    gap: '10px'
+                    ...button,
+                    width: "100%",
+                    background: "#10b981",
                   }}
                 >
+                  Proceed ₹
+                  {selectedRoute?.fare || 30}
+                </button>
 
-                  <button
-                    type="submit"
-
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      backgroundColor: '#10b981',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    Proceed ₹
-                    {selectedRoute?.fare || 30}
-                  </button>
-
-
-                  <button
-                    type="button"
-
-                    onClick={() =>
-                      setShowPaymentModal(false)
-                    }
-
-                    style={{
-                      padding: '10px',
-                      backgroundColor: '#4b5563',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Cancel
-                  </button>
-
-                </div>
-
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowPayment(false)
+                  }
+                  style={{
+                    ...button,
+                    width: "100%",
+                    marginTop: "8px",
+                    background: "#4b5563",
+                  }}
+                >
+                  Cancel
+                </button>
               </form>
-
             ) : (
-
               <div
                 style={{
-                  backgroundColor: '#1f2937',
-                  padding: '20px',
-                  borderRadius: '8px',
-                  textAlign: 'center'
+                  background: "#1f2937",
+                  padding: "20px",
+                  borderRadius: "8px",
+                  textAlign: "center",
                 }}
               >
-
                 <h3
                   style={{
-                    color: '#38bdf8',
-                    fontSize: '15px'
+                    color: "#38bdf8",
                   }}
                 >
                   Scan & Pay ₹
                   {selectedRoute?.fare || 30}
                 </h3>
 
-
                 <div
                   style={{
-                    backgroundColor: '#fff',
-                    display: 'inline-block',
-                    padding: '15px',
-                    borderRadius: '8px'
+                    display: "inline-block",
+                    background: "#fff",
+                    padding: "15px",
+                    borderRadius: "8px",
                   }}
                 >
-
                   <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=bharatbus@icici%26pn=BharatBusAI%26am=${selectedRoute?.fare || 30}.00%26cu=INR`}
-                    alt="UPI QR"
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=bharatbus@icici%26pn=BharatBusAI%26am=${selectedRoute?.fare || 30}.00%26cu=INR`}
+                    alt="BharatBus UPI QR"
                   />
-
                 </div>
 
-
                 <button
-                  onClick={handleVerifyUpiPayment}
-
+                  onClick={handlePayment}
                   style={{
-                    width: '100%',
-                    marginTop: '15px',
-                    padding: '12px',
-                    backgroundColor: '#10b981',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold'
+                    ...button,
+                    width: "100%",
+                    marginTop: "15px",
+                    background: "#10b981",
                   }}
                 >
                   Simulate Bank Payment
                 </button>
 
-
                 <button
                   onClick={() =>
-                    setShowPaymentModal(false)
+                    setShowPayment(false)
                   }
-
                   style={{
-                    marginTop: '10px',
-                    background: 'transparent',
-                    color: '#9ca3af',
-                    border: 'none',
-                    cursor: 'pointer'
+                    marginTop: "10px",
+                    background: "transparent",
+                    color: "#9ca3af",
+                    border: "none",
+                    cursor: "pointer",
                   }}
                 >
                   Back
                 </button>
-
               </div>
-
             )}
-
           </div>
-
 
           {/* GPS MAP */}
 
           <div
             style={{
-              ...sectionStyle,
-              height: '420px',
-              display: 'flex',
-              flexDirection: 'column'
+              ...section,
+              height: "420px",
+              display: "flex",
+              flexDirection: "column",
             }}
           >
-
-            <h3
+            <div
               style={{
-                color: '#38bdf8',
-                fontSize: '15px',
-                marginTop: 0
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
               }}
             >
-              🗺️ Live Bus GPS Tracking
-            </h3>
+              <h3
+                style={{
+                  color: "#38bdf8",
+                  marginTop: 0,
+                }}
+              >
+                🗺️ Live Bus GPS
+              </h3>
 
+              <span
+                style={{
+                  color: "#34d399",
+                  fontSize: "11px",
+                }}
+              >
+                {backendStatus}
+              </span>
+            </div>
 
             <div
               style={{
                 flex: 1,
-                overflow: 'hidden',
-                borderRadius: '8px'
+                overflow: "hidden",
+                borderRadius: "8px",
               }}
             >
-
               <MapContainer
                 center={busPosition}
                 zoom={13}
                 style={{
-                  width: '100%',
-                  height: '100%'
+                  width: "100%",
+                  height: "100%",
                 }}
               >
-
                 <TileLayer
                   url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  attribution="© OpenStreetMap"
                 />
 
-
-                <Marker
-                  position={busPosition}
-                >
-
+                <Marker position={busPosition}>
                   <Popup>
-                    Bus #
-                    {selectedRoute?.bus_no ||
-                      'DL-01-AI-4029'}
+                    <b>
+                      Bus #
+                      {selectedRoute?.bus_no ||
+                        "DL-01-AI-4029"}
+                    </b>
                     <br />
-                    Status: Moving Live 🟢
+                    Status: Moving 🟢
+                    <br />
+                    BharatBus AI GPS
                   </Popup>
-
                 </Marker>
-
               </MapContainer>
-
             </div>
-
           </div>
-
         </div>
-
       )}
 
-
       {/* ======================================================
-          ADMIN — SMART INFRASTRUCTURE COMMAND CENTER
+          ADMIN COMMAND CENTER
       ====================================================== */}
 
-      {activeTab === 'admin' && (
-
+      {activeTab === "admin" && (
         <div>
-
-
           {/* TITLE */}
 
           <div
             style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: '15px',
-              flexWrap: 'wrap',
-              marginBottom: '18px'
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "12px",
+              marginBottom: "18px",
             }}
           >
-
             <div>
-
               <h2
                 style={{
                   margin: 0,
-                  color: '#38bdf8',
-                  fontSize: '22px'
+                  color: "#38bdf8",
                 }}
               >
-                🇮🇳 BharatBus AI
+                🇮🇳 BharatBus AI Command Center
               </h2>
-
 
               <p
                 style={{
-                  color: '#9ca3af',
-                  fontSize: '13px',
-                  margin: '6px 0 0'
+                  color: "#9ca3af",
+                  fontSize: "12px",
                 }}
               >
-                Smart Public Transport Infrastructure Command Center
+                National Smart Public Transport
+                Infrastructure Intelligence
               </p>
-
             </div>
-
 
             <span
               style={{
-                backgroundColor: '#172554',
-                color: '#60a5fa',
-                border: '1px solid #1d4ed8',
-                padding: '7px 12px',
-                borderRadius: '20px',
-                fontSize: '10px',
-                fontWeight: 'bold'
+                background: "#065f46",
+                color: "#34d399",
+                border: "1px solid #34d399",
+                padding: "7px 12px",
+                borderRadius: "20px",
+                fontSize: "10px",
+                fontWeight: "bold",
               }}
             >
-              DEMO DATA • AI/SAS PROTOTYPE
+              ● SYSTEM {backendStatus.toUpperCase()}
             </span>
-
           </div>
 
-
-          {/* ==================================================
-              KPI CARDS
-          ================================================== */}
+          {/* KPI */}
 
           <div
             style={{
-              display: 'grid',
+              display: "grid",
               gridTemplateColumns:
-                'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '15px',
-              marginBottom: '18px'
+                "repeat(auto-fit,minmax(170px,1fr))",
+              gap: "14px",
+              marginBottom: "18px",
             }}
           >
-
-            <div style={cardStyle}>
-
-              <p style={labelStyle}>
+            <div style={card}>
+              <p style={muted}>
                 🚌 Active Bus Stands
               </p>
 
-              <h3
+              <h2
                 style={{
-                  ...valueStyle,
-                  color: '#38bdf8'
+                  color: "#38bdf8",
+                  margin: 0,
                 }}
               >
                 {infrastructure.busStands}
-              </h3>
+              </h2>
 
-              <span style={mutedStyle}>
+              <small style={muted}>
                 Monitored network
-              </span>
-
+              </small>
             </div>
 
-
-            <div style={cardStyle}>
-
-              <p style={labelStyle}>
+            <div style={card}>
+              <p style={muted}>
                 👥 Current Passengers
               </p>
 
-              <h3
+              <h2
                 style={{
-                  ...valueStyle,
-                  color: '#34d399'
+                  color: "#34d399",
+                  margin: 0,
                 }}
               >
                 {Number(
                   telemetry.total_crowd || 0
                 ).toLocaleString()}
-              </h3>
+              </h2>
 
-              <span style={mutedStyle}>
-                Live crowd telemetry
-              </span>
-
+              <small style={muted}>
+                Live telemetry
+              </small>
             </div>
 
-
-            <div style={cardStyle}>
-
-              <p style={labelStyle}>
+            <div style={card}>
+              <p style={muted}>
                 🚨 Active AI Alerts
               </p>
 
-              <h3
+              <h2
                 style={{
-                  ...valueStyle,
-                  color: '#f87171'
+                  color: "#f87171",
+                  margin: 0,
                 }}
               >
                 {infrastructure.alerts}
-              </h3>
+              </h2>
 
-              <span style={mutedStyle}>
+              <small style={muted}>
                 2 high priority
-              </span>
-
+              </small>
             </div>
 
-
-            <div style={cardStyle}>
-
-              <p style={labelStyle}>
-                🧹 Cleanliness Score
+            <div style={card}>
+              <p style={muted}>
+                🧹 Cleanliness
               </p>
 
-              <h3
+              <h2
                 style={{
-                  ...valueStyle,
-                  color: '#fbbf24'
+                  color: "#fbbf24",
+                  margin: 0,
                 }}
               >
                 {infrastructure.cleanliness}%
-              </h3>
+              </h2>
 
-              <span style={mutedStyle}>
+              <small style={muted}>
                 AI assessment
-              </span>
-
+              </small>
             </div>
 
-
-            <div style={cardStyle}>
-
-              <p style={labelStyle}>
+            <div style={card}>
+              <p style={muted}>
                 🚻 Facility Health
               </p>
 
-              <h3
+              <h2
                 style={{
-                  ...valueStyle,
-                  color: '#a78bfa'
+                  color: "#a78bfa",
+                  margin: 0,
                 }}
               >
                 {infrastructure.facilities}%
-              </h3>
+              </h2>
 
-              <span style={mutedStyle}>
-                Water + Toilet + Waiting
-              </span>
-
+              <small style={muted}>
+                Infrastructure
+              </small>
             </div>
 
-
-            <div style={cardStyle}>
-
-              <p style={labelStyle}>
-                🏥 Infrastructure Health
+            <div style={card}>
+              <p style={muted}>
+                🏥 Overall Health
               </p>
 
-              <h3
+              <h2
                 style={{
-                  ...valueStyle,
-                  color: '#22d3ee'
+                  color: "#22d3ee",
+                  margin: 0,
                 }}
               >
                 {infrastructure.healthScore}/100
-              </h3>
+              </h2>
 
-              <span style={mutedStyle}>
-                AI/SAS composite score
-              </span>
-
+              <small style={muted}>
+                AI + SAS Score
+              </small>
             </div>
-
           </div>
 
+          {/* AI ALERTS */}
 
-          {/* ==================================================
-              LIVE AI ALERTS
-          ================================================== */}
-
-          <section style={sectionStyle}>
-
+          <section style={section}>
             <h3
               style={{
-                color: '#38bdf8',
-                fontSize: '16px',
-                marginTop: 0
+                color: "#38bdf8",
+                marginTop: 0,
               }}
             >
               🚨 Live AI Infrastructure Alerts
             </h3>
 
-
             <div
               style={{
-                display: 'grid',
+                display: "grid",
                 gridTemplateColumns:
-                  'repeat(auto-fit, minmax(250px, 1fr))',
-                gap: '12px'
+                  "repeat(auto-fit,minmax(240px,1fr))",
+                gap: "12px",
               }}
             >
-
-              <div style={alertCard('#7f1d1d')}>
-
+              <div
+                style={{
+                  ...card,
+                  borderColor: "#7f1d1d",
+                }}
+              >
                 <strong
                   style={{
-                    color: '#f87171',
-                    fontSize: '11px'
+                    color: "#f87171",
                   }}
                 >
                   🔴 HIGH PRIORITY
                 </strong>
-
 
                 <h4>
                   Platform 4 — Garbage Overflow
                 </h4>
 
-
-                <p
-                  style={{
-                    color: '#9ca3af',
-                    fontSize: '12px',
-                    lineHeight: 1.5
-                  }}
-                >
+                <p style={muted}>
                   AI detected excessive waste
                   accumulation.
                 </p>
 
-
                 <span
                   style={{
-                    backgroundColor: '#065f46',
-                    padding: '5px 9px',
-                    borderRadius: '5px',
-                    fontSize: '10px'
+                    color: "#34d399",
+                    fontSize: "11px",
                   }}
                 >
                   Cleaning Team Assigned
                 </span>
-
               </div>
 
-
-              <div style={alertCard('#78350f')}>
-
+              <div
+                style={{
+                  ...card,
+                  borderColor: "#78350f",
+                }}
+              >
                 <strong
                   style={{
-                    color: '#fbbf24',
-                    fontSize: '11px'
+                    color: "#fbbf24",
                   }}
                 >
                   🟠 MEDIUM PRIORITY
                 </strong>
 
-
                 <h4>
                   Platform 2 — High Crowd Density
                 </h4>
 
-
-                <p
-                  style={{
-                    color: '#9ca3af',
-                    fontSize: '12px',
-                    lineHeight: 1.5
-                  }}
-                >
-                  Occupancy is approaching safe
+                <p style={muted}>
+                  Occupancy approaching safe
                   capacity.
                 </p>
 
-
                 <span
                   style={{
-                    backgroundColor: '#78350f',
-                    padding: '5px 9px',
-                    borderRadius: '5px',
-                    fontSize: '10px'
+                    color: "#fbbf24",
+                    fontSize: "11px",
                   }}
                 >
                   AI Monitoring
                 </span>
-
               </div>
 
-
-              <div style={alertCard('#7f1d1d')}>
-
+              <div
+                style={{
+                  ...card,
+                  borderColor: "#7f1d1d",
+                }}
+              >
                 <strong
                   style={{
-                    color: '#f87171',
-                    fontSize: '11px'
+                    color: "#f87171",
                   }}
                 >
                   🔴 HIGH PRIORITY
                 </strong>
 
-
                 <h4>
-                  Public Toilet — Cleaning Overdue
+                  Public Toilet — Cleaning
+                  Overdue
                 </h4>
 
-
-                <p
-                  style={{
-                    color: '#9ca3af',
-                    fontSize: '12px',
-                    lineHeight: 1.5
-                  }}
-                >
-                  Cleaning service required
-                  immediately.
+                <p style={muted}>
+                  Maintenance service required.
                 </p>
-
 
                 <span
                   style={{
-                    backgroundColor: '#92400e',
-                    padding: '5px 9px',
-                    borderRadius: '5px',
-                    fontSize: '10px'
+                    color: "#f87171",
+                    fontSize: "11px",
                   }}
                 >
                   Maintenance Pending
                 </span>
-
               </div>
-
             </div>
-
           </section>
 
+          {/* FACILITY MONITORING */}
 
-          {/* ==================================================
-              FACILITY MONITORING
-          ================================================== */}
-
-          <section style={sectionStyle}>
-
+          <section style={section}>
             <h3
               style={{
-                color: '#38bdf8',
-                fontSize: '16px',
-                marginTop: 0
+                color: "#38bdf8",
+                marginTop: 0,
               }}
             >
-              🏢 Smart Bus Stand Facility Monitoring
+              🏢 Smart Bus Stand Facility
+              Monitoring
             </h3>
-
 
             <div
               style={{
-                display: 'grid',
+                display: "grid",
                 gridTemplateColumns:
-                  'repeat(auto-fit, minmax(180px, 1fr))',
-                gap: '12px'
+                  "repeat(auto-fit,minmax(170px,1fr))",
+                gap: "12px",
               }}
             >
-
-              <div style={insightCard}>
-
-                <strong
-                  style={{
-                    color: '#f87171'
-                  }}
-                >
-                  🌡️ Temperature
-                </strong>
+              <div style={card}>
+                <strong>🌡️ Temperature</strong>
 
                 <h2>
                   {infrastructure.temperature}°C
@@ -1336,25 +1072,16 @@ export default function App() {
 
                 <span
                   style={{
-                    color: '#f87171',
-                    fontSize: '11px'
+                    color: "#f87171",
+                    fontSize: "11px",
                   }}
                 >
                   🔴 High Heat Risk
                 </span>
-
               </div>
 
-
-              <div style={insightCard}>
-
-                <strong
-                  style={{
-                    color: '#38bdf8'
-                  }}
-                >
-                  💧 Humidity
-                </strong>
+              <div style={card}>
+                <strong>💧 Humidity</strong>
 
                 <h2>
                   {infrastructure.humidity}%
@@ -1362,25 +1089,16 @@ export default function App() {
 
                 <span
                   style={{
-                    color: '#fbbf24',
-                    fontSize: '11px'
+                    color: "#fbbf24",
+                    fontSize: "11px",
                   }}
                 >
                   🟡 Monitor Comfort
                 </span>
-
               </div>
 
-
-              <div style={insightCard}>
-
-                <strong
-                  style={{
-                    color: '#38bdf8'
-                  }}
-                >
-                  🚰 Water Level
-                </strong>
+              <div style={card}>
+                <strong>🚰 Water Level</strong>
 
                 <h2>
                   {infrastructure.waterLevel}%
@@ -1388,25 +1106,16 @@ export default function App() {
 
                 <span
                   style={{
-                    color: '#34d399',
-                    fontSize: '11px'
+                    color: "#34d399",
+                    fontSize: "11px",
                   }}
                 >
                   🟢 Available
                 </span>
-
               </div>
 
-
-              <div style={insightCard}>
-
-                <strong
-                  style={{
-                    color: '#a78bfa'
-                  }}
-                >
-                  🚻 Toilet Health
-                </strong>
+              <div style={card}>
+                <strong>🚻 Toilet Health</strong>
 
                 <h2>
                   {infrastructure.toiletHealth}%
@@ -1414,25 +1123,16 @@ export default function App() {
 
                 <span
                   style={{
-                    color: '#f87171',
-                    fontSize: '11px'
+                    color: "#f87171",
+                    fontSize: "11px",
                   }}
                 >
                   🔴 Cleaning Required
                 </span>
-
               </div>
 
-
-              <div style={insightCard}>
-
-                <strong
-                  style={{
-                    color: '#fbbf24'
-                  }}
-                >
-                  🗑️ Smart Dustbin
-                </strong>
+              <div style={card}>
+                <strong>🗑️ Smart Dustbin</strong>
 
                 <h2>
                   {infrastructure.dustbinLevel}%
@@ -1440,25 +1140,16 @@ export default function App() {
 
                 <span
                   style={{
-                    color: '#f87171',
-                    fontSize: '11px'
+                    color: "#f87171",
+                    fontSize: "11px",
                   }}
                 >
                   🔴 Near Capacity
                 </span>
-
               </div>
 
-
-              <div style={insightCard}>
-
-                <strong
-                  style={{
-                    color: '#22d3ee'
-                  }}
-                >
-                  🌫️ Air Quality
-                </strong>
+              <div style={card}>
+                <strong>🌫️ Air Quality</strong>
 
                 <h2>
                   AQI {infrastructure.airQuality}
@@ -1466,318 +1157,222 @@ export default function App() {
 
                 <span
                   style={{
-                    color: '#fbbf24',
-                    fontSize: '11px'
+                    color: "#fbbf24",
+                    fontSize: "11px",
                   }}
                 >
                   🟡 Moderate Risk
                 </span>
-
               </div>
-
             </div>
-
           </section>
 
+          {/* AI INSIGHTS */}
 
-          {/* ==================================================
-              AI INSIGHTS
-          ================================================== */}
-
-          <section style={sectionStyle}>
-
+          <section style={section}>
             <h3
               style={{
-                color: '#38bdf8',
-                fontSize: '16px',
-                marginTop: 0
+                color: "#38bdf8",
+                marginTop: 0,
               }}
             >
-              🧠 AI Infrastructure Insights
+              🧠 AI Predictive Insights
             </h3>
-
 
             <div
               style={{
-                display: 'grid',
+                display: "grid",
                 gridTemplateColumns:
-                  'repeat(auto-fit, minmax(250px, 1fr))',
-                gap: '12px'
+                  "repeat(auto-fit,minmax(240px,1fr))",
+                gap: "12px",
               }}
             >
-
-              <div style={insightCard}>
-
+              <div style={card}>
                 <strong
                   style={{
-                    color: '#38bdf8'
+                    color: "#38bdf8",
                   }}
                 >
                   👥 Crowd Prediction
                 </strong>
 
-                <p
-                  style={{
-                    color: '#9ca3af',
-                    fontSize: '12px',
-                    lineHeight: 1.6
-                  }}
-                >
-                  Platform 3 is expected to exceed
-                  safe capacity during the evening
-                  peak.
+                <p style={muted}>
+                  Platform 3 is expected to
+                  exceed safe capacity during
+                  evening peak hours.
                 </p>
 
                 <b
                   style={{
-                    color: '#fbbf24',
-                    fontSize: '11px'
+                    color: "#fbbf24",
+                    fontSize: "11px",
                   }}
                 >
                   Prediction Risk: MEDIUM
                 </b>
-
               </div>
 
-
-              <div style={insightCard}>
-
+              <div style={card}>
                 <strong
                   style={{
-                    color: '#f87171'
+                    color: "#f87171",
                   }}
                 >
                   🌡️ Heat Risk Prediction
                 </strong>
 
-                <p
-                  style={{
-                    color: '#9ca3af',
-                    fontSize: '12px',
-                    lineHeight: 1.6
-                  }}
-                >
-                  Waiting-area comfort risk is
-                  increasing. Additional cooling
-                  capacity is recommended.
+                <p style={muted}>
+                  Waiting-area heat stress risk
+                  is increasing.
                 </p>
 
                 <b
                   style={{
-                    color: '#f87171',
-                    fontSize: '11px'
+                    color: "#f87171",
+                    fontSize: "11px",
                   }}
                 >
                   Risk Level: HIGH
                 </b>
-
               </div>
 
-
-              <div style={insightCard}>
-
+              <div style={card}>
                 <strong
                   style={{
-                    color: '#a78bfa'
+                    color: "#a78bfa",
                   }}
                 >
                   🔧 Predictive Maintenance
                 </strong>
 
-                <p
-                  style={{
-                    color: '#9ca3af',
-                    fontSize: '12px',
-                    lineHeight: 1.6
-                  }}
-                >
+                <p style={muted}>
                   Cooling equipment requires
-                  inspection based on recent
-                  operating patterns.
+                  preventive inspection.
                 </p>
 
                 <b
                   style={{
-                    color: '#fbbf24',
-                    fontSize: '11px'
+                    color: "#fbbf24",
+                    fontSize: "11px",
                   }}
                 >
-                  Preventive Action Recommended
+                  Action Recommended
                 </b>
-
               </div>
-
             </div>
-
           </section>
 
+          {/* WORKFLOW */}
 
-          {/* ==================================================
-              AI WORKFLOW
-          ================================================== */}
-
-          <section style={sectionStyle}>
-
+          <section style={section}>
             <h3
               style={{
-                color: '#38bdf8',
-                fontSize: '16px',
-                marginTop: 0
+                color: "#38bdf8",
+                marginTop: 0,
               }}
             >
               🔄 BharatBus AI Response Workflow
             </h3>
 
-
             <div
               style={{
-                display: 'grid',
+                display: "grid",
                 gridTemplateColumns:
-                  'repeat(auto-fit, minmax(120px, 1fr))',
-                gap: '8px'
+                  "repeat(auto-fit,minmax(120px,1fr))",
+                gap: "8px",
               }}
             >
+              {[
+                ["📹", "Detect", "Camera / IoT"],
+                ["🤖", "Analyze", "AI Engine"],
+                ["📊", "Predict", "SAS Analytics"],
+                ["🚨", "Act", "Authority Alert"],
+                ["✅", "Verify", "AI Verification"],
+              ].map(([icon, title, subtitle]) => (
+                <div
+                  key={title}
+                  style={{
+                    ...card,
+                    textAlign: "center",
+                    padding: "15px 8px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "27px",
+                    }}
+                  >
+                    {icon}
+                  </div>
 
-              <div style={workflowCard}>
-                <div style={{ fontSize: '25px' }}>
-                  📹
+                  <strong>{title}</strong>
+
+                  <small style={muted}>
+                    {subtitle}
+                  </small>
                 </div>
-                <strong>Detect</strong>
-                <small style={{ color: '#9ca3af' }}>
-                  Camera / IoT
-                </small>
-              </div>
-
-
-              <div style={workflowCard}>
-                <div style={{ fontSize: '25px' }}>
-                  🤖
-                </div>
-                <strong>Analyze</strong>
-                <small style={{ color: '#9ca3af' }}>
-                  AI Engine
-                </small>
-              </div>
-
-
-              <div style={workflowCard}>
-                <div style={{ fontSize: '25px' }}>
-                  📊
-                </div>
-                <strong>Predict</strong>
-                <small style={{ color: '#9ca3af' }}>
-                  SAS Analytics
-                </small>
-              </div>
-
-
-              <div style={workflowCard}>
-                <div style={{ fontSize: '25px' }}>
-                  🚨
-                </div>
-                <strong>Act</strong>
-                <small style={{ color: '#9ca3af' }}>
-                  Authority Alert
-                </small>
-              </div>
-
-
-              <div style={workflowCard}>
-                <div style={{ fontSize: '25px' }}>
-                  ✅
-                </div>
-                <strong>Verify</strong>
-                <small style={{ color: '#9ca3af' }}>
-                  AI Verification
-                </small>
-              </div>
-
+              ))}
             </div>
-
           </section>
 
+          {/* CROWD ANALYTICS */}
 
-          {/* ==================================================
-              CROWD ANALYTICS
-          ================================================== */}
-
-          <section style={sectionStyle}>
-
+          <section style={section}>
             <div
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                flexWrap: 'wrap',
-                gap: '10px'
+                display: "flex",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "10px",
               }}
             >
-
               <h3
                 style={{
-                  color: '#38bdf8',
-                  fontSize: '16px',
-                  margin: 0
+                  color: "#38bdf8",
+                  margin: 0,
                 }}
               >
-                📊 Hourly Passenger Crowd Trends
+                📊 Passenger Crowd Analytics
               </h3>
 
-
-              <span
-                style={{
-                  color: '#6b7280',
-                  fontSize: '10px'
-                }}
-              >
-                AI/SAS Analytics Ready
+              <span style={muted}>
+                AI + SAS Analytics
               </span>
-
             </div>
-
 
             <div
               style={{
-                width: '100%',
-                height: '300px',
-                marginTop: '15px'
+                width: "100%",
+                height: "300px",
+                marginTop: "15px",
               }}
             >
-
               <ResponsiveContainer
                 width="100%"
                 height="100%"
               >
-
-                <LineChart
-                  data={chartData}
-                >
-
+                <LineChart data={crowdData}>
                   <CartesianGrid
                     strokeDasharray="3 3"
                     stroke="#374151"
                   />
-
 
                   <XAxis
                     dataKey="time"
                     stroke="#9ca3af"
                   />
 
-
                   <YAxis
                     stroke="#9ca3af"
                   />
 
-
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#1f2937',
-                      borderColor: '#374151',
-                      color: '#fff'
+                      background: "#1f2937",
+                      border: "1px solid #374151",
+                      color: "#fff",
                     }}
                   />
-
 
                   <Line
                     type="monotone"
@@ -1786,41 +1381,89 @@ export default function App() {
                     strokeWidth={3}
                     dot={{ r: 4 }}
                   />
-
                 </LineChart>
-
               </ResponsiveContainer>
-
             </div>
-
           </section>
 
+          {/* NATIONAL VISION */}
 
-          {/* ==================================================
-              FOOTER
-          ================================================== */}
+          <section style={section}>
+            <h3
+              style={{
+                color: "#38bdf8",
+                marginTop: 0,
+              }}
+            >
+              🇮🇳 National Deployment Vision
+            </h3>
 
-          <div
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  "repeat(auto-fit,minmax(220px,1fr))",
+                gap: "12px",
+              }}
+            >
+              <div style={card}>
+                <h3>🚌 Transport</h3>
+                <p style={muted}>
+                  Monitor buses, routes, crowd
+                  levels and passenger demand.
+                </p>
+              </div>
+
+              <div style={card}>
+                <h3>🏢 Infrastructure</h3>
+                <p style={muted}>
+                  Monitor cleanliness, toilets,
+                  water, lighting and waiting
+                  areas.
+                </p>
+              </div>
+
+              <div style={card}>
+                <h3>🧠 AI + SAS</h3>
+                <p style={muted}>
+                  Predict problems before they
+                  become major public-service
+                  failures.
+                </p>
+              </div>
+
+              <div style={card}>
+                <h3>🚨 Government Action</h3>
+                <p style={muted}>
+                  Convert AI alerts into
+                  maintenance and authority
+                  actions.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          {/* FOOTER */}
+
+          <footer
             style={{
-              textAlign: 'center',
-              padding: '15px',
-              color: '#6b7280',
-              fontSize: '10px'
+              textAlign: "center",
+              color: "#6b7280",
+              fontSize: "10px",
+              padding: "15px",
             }}
           >
-            BharatBus AI • AI + IoT + SAS Powered
-            Public Transport Infrastructure Intelligence
+            <b>BharatBus AI</b>
             <br />
-            <span>
-              DEMO PROTOTYPE — Infrastructure metrics are simulated
-              until live sensors/backend are connected.
-            </span>
-          </div>
-
+            AI + IoT + SAS Powered Public
+            Transport Infrastructure Intelligence
+            <br />
+            Prototype data is simulated until
+            live IoT/CCTV infrastructure is
+            connected.
+          </footer>
         </div>
-
       )}
-
     </div>
   );
 }
