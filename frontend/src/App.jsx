@@ -21,6 +21,8 @@ import {
   CartesianGrid,
 } from "recharts";
 
+import X402Payment from "./X402Payment";
+
 // ============================================================
 // PRODUCTION BACKEND
 // ============================================================
@@ -289,17 +291,14 @@ export default function App() {
     fetchRoutes();
     fetchTelemetry();
 
-    // Live telemetry every 15 seconds
     const telemetryInterval = setInterval(() => {
       fetchTelemetry();
     }, 15000);
 
-    // Refresh routes every 60 seconds
     const routesInterval = setInterval(() => {
       fetchRoutes();
     }, 60000);
 
-    // GPS movement simulation
     const gpsInterval = setInterval(() => {
       setBusPosition((previous) => [
         previous[0] +
@@ -385,10 +384,6 @@ export default function App() {
     ]);
   };
 
-  // ==========================================================
-  // LAST UPDATED TEXT
-  // ==========================================================
-
   const updatedText = lastUpdated
     ? lastUpdated.toLocaleTimeString()
     : "Waiting for data";
@@ -409,10 +404,7 @@ export default function App() {
         boxSizing: "border-box",
       }}
     >
-      {/* ======================================================
-          HEADER
-      ====================================================== */}
-
+      {/* HEADER */}
       <header
         style={{
           display: "flex",
@@ -498,10 +490,7 @@ export default function App() {
         </div>
       </header>
 
-      {/* ======================================================
-          NOTIFICATION
-      ====================================================== */}
-
+      {/* NOTIFICATION */}
       {notification && (
         <div
           style={{
@@ -519,10 +508,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ======================================================
-          PASSENGER PORTAL
-      ====================================================== */}
-
+      {/* PASSENGER PORTAL */}
       {activeTab === "passenger" && (
         <div
           style={{
@@ -532,8 +518,6 @@ export default function App() {
             gap: "20px",
           }}
         >
-          {/* BOOKING */}
-
           <div style={section}>
             <div
               style={{
@@ -568,11 +552,9 @@ export default function App() {
               </h2>
 
               <p style={muted}>
-                Smart Ticketing + Live GPS
+                Smart Ticketing + Live GPS + x402 Web3
               </p>
             </div>
-
-            {/* ROUTE */}
 
             <div
               style={{
@@ -678,7 +660,7 @@ export default function App() {
                     background: "#0284c7",
                   }}
                 >
-                  Book Ticket — UPI QR
+                  Book Ticket
                 </button>
               </div>
             ) : paymentStep === "form" ? (
@@ -738,9 +720,7 @@ export default function App() {
                     background: "#10b981",
                   }}
                 >
-                  Proceed ₹
-                  {selectedRoute?.fare ||
-                    30}
+                  Proceed to Payment
                 </button>
 
                 <button
@@ -770,48 +750,66 @@ export default function App() {
                 <h3
                   style={{
                     color: "#38bdf8",
+                    marginBottom: "15px",
                   }}
                 >
-                  Scan & Pay ₹
-                  {selectedRoute?.fare ||
-                    30}
+                  Choose Payment Gateway
                 </h3>
 
-                <div
-                  style={{
-                    display:
-                      "inline-block",
-                    background: "#fff",
-                    padding: "15px",
-                    borderRadius: "8px",
-                  }}
-                >
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=upi://pay?pa=bharatbus@icici%26pn=BharatBusAI%26am=${selectedRoute?.fare || 30}.00%26cu=INR`}
-                    alt="BharatBus UPI QR"
-                    width="180"
-                    height="180"
-                  />
+                {/* Option A: UPI QR */}
+                <div style={{ marginBottom: "20px" }}>
+                  <p style={{ fontSize: "12px", color: "#9ca3af", marginBottom: "8px" }}>
+                    Option A: UPI Payment
+                  </p>
+                  <div
+                    style={{
+                      display:
+                        "inline-block",
+                      background: "#fff",
+                      padding: "10px",
+                      borderRadius: "8px",
+                    }}
+                  >
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=bharatbus@icici%26pn=BharatBusAI%26am=${selectedRoute?.fare || 30}.00%26cu=INR`}
+                      alt="BharatBus UPI QR"
+                      width="150"
+                      height="150"
+                    />
+                  </div>
+                  <button
+                    onClick={handlePayment}
+                    style={{
+                      ...button,
+                      width: "100%",
+                      marginTop: "10px",
+                      background: "#10b981",
+                    }}
+                  >
+                    Simulate UPI Payment
+                  </button>
                 </div>
 
-                <button
-                  onClick={handlePayment}
-                  style={{
-                    ...button,
-                    width: "100%",
-                    marginTop: "15px",
-                    background: "#10b981",
-                  }}
-                >
-                  Simulate Bank Payment
-                </button>
+                <hr style={{ borderColor: "#374151", margin: "20px 0" }} />
+
+                {/* Option B: x402 Algorand Web3 Component */}
+                <div>
+                  <p style={{ fontSize: "12px", color: "#38bdf8", marginBottom: "8px", fontWeight: "bold" }}>
+                    Option B: Web3 x402 Micro-Transaction
+                  </p>
+                  <X402Payment
+                    routeId={selectedRoute?.id ? String(selectedRoute.id) : "JAIPUR-MAIN"}
+                    fareAmount={(selectedRoute?.fare || 30) * 1000000}
+                    passengerName={passengerName}
+                  />
+                </div>
 
                 <button
                   onClick={() =>
                     setPaymentStep("form")
                   }
                   style={{
-                    marginTop: "10px",
+                    marginTop: "15px",
                     background:
                       "transparent",
                     color: "#9ca3af",
@@ -826,7 +824,6 @@ export default function App() {
           </div>
 
           {/* GPS MAP */}
-
           <div
             style={{
               ...section,
@@ -857,8 +854,7 @@ export default function App() {
                 </h3>
 
                 <span style={muted}>
-                  Last update:{" "}
-                  {updatedText}
+                  Last update: {updatedText}
                 </span>
               </div>
 
@@ -923,14 +919,9 @@ export default function App() {
         </div>
       )}
 
-      {/* ======================================================
-          ADMIN COMMAND CENTER
-      ====================================================== */}
-
+      {/* ADMIN COMMAND CENTER */}
       {activeTab === "admin" && (
         <div>
-          {/* TITLE */}
-
           <div
             style={{
               display: "flex",
@@ -993,8 +984,6 @@ export default function App() {
             </span>
           </div>
 
-          {/* LIVE STATUS */}
-
           <section
             style={{
               ...section,
@@ -1026,8 +1015,6 @@ export default function App() {
               </span>
             </div>
           </section>
-
-          {/* KPI */}
 
           <div
             style={{
@@ -1157,8 +1144,6 @@ export default function App() {
             </div>
           </div>
 
-          {/* AI ALERTS */}
-
           <section style={section}>
             <h3
               style={{
@@ -1281,599 +1266,6 @@ export default function App() {
               </div>
             </div>
           </section>
-
-          {/* FACILITY MONITORING */}
-
-          <section style={section}>
-            <h3
-              style={{
-                color: "#38bdf8",
-                marginTop: 0,
-              }}
-            >
-              🏢 Smart Bus Stand
-              Facility Monitoring
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit,minmax(170px,1fr))",
-                gap: "12px",
-              }}
-            >
-              <div style={card}>
-                <strong>
-                  🌡️ Temperature
-                </strong>
-
-                <h2>
-                  {infrastructure.temperature}
-                  °C
-                </h2>
-
-                <span
-                  style={{
-                    color: "#f87171",
-                    fontSize: "11px",
-                  }}
-                >
-                  🔴 High Heat Risk
-                </span>
-              </div>
-
-              <div style={card}>
-                <strong>
-                  💧 Humidity
-                </strong>
-
-                <h2>
-                  {infrastructure.humidity}%
-                </h2>
-
-                <span
-                  style={{
-                    color: "#fbbf24",
-                    fontSize: "11px",
-                  }}
-                >
-                  🟡 Monitor Comfort
-                </span>
-              </div>
-
-              <div style={card}>
-                <strong>
-                  🚰 Water Level
-                </strong>
-
-                <h2>
-                  {infrastructure.waterLevel}%
-                </h2>
-
-                <span
-                  style={{
-                    color: "#34d399",
-                    fontSize: "11px",
-                  }}
-                >
-                  🟢 Available
-                </span>
-              </div>
-
-              <div style={card}>
-                <strong>
-                  🚻 Toilet Health
-                </strong>
-
-                <h2>
-                  {infrastructure.toiletHealth}%
-                </h2>
-
-                <span
-                  style={{
-                    color: "#f87171",
-                    fontSize: "11px",
-                  }}
-                >
-                  🔴 Cleaning Required
-                </span>
-              </div>
-
-              <div style={card}>
-                <strong>
-                  🗑️ Smart Dustbin
-                </strong>
-
-                <h2>
-                  {infrastructure.dustbinLevel}%
-                </h2>
-
-                <span
-                  style={{
-                    color: "#f87171",
-                    fontSize: "11px",
-                  }}
-                >
-                  🔴 Near Capacity
-                </span>
-              </div>
-
-              <div style={card}>
-                <strong>
-                  🌫️ Air Quality
-                </strong>
-
-                <h2>
-                  AQI{" "}
-                  {infrastructure.airQuality}
-                </h2>
-
-                <span
-                  style={{
-                    color: "#fbbf24",
-                    fontSize: "11px",
-                  }}
-                >
-                  🟡 Moderate Risk
-                </span>
-              </div>
-            </div>
-          </section>
-
-          {/* AI INSIGHTS */}
-
-          <section style={section}>
-            <h3
-              style={{
-                color: "#38bdf8",
-                marginTop: 0,
-              }}
-            >
-              🧠 AI Predictive Insights
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit,minmax(240px,1fr))",
-                gap: "12px",
-              }}
-            >
-              <div style={card}>
-                <strong
-                  style={{
-                    color: "#38bdf8",
-                  }}
-                >
-                  👥 Crowd Prediction
-                </strong>
-
-                <p style={muted}>
-                  Platform 3 is expected
-                  to exceed safe capacity
-                  during evening peak
-                  hours.
-                </p>
-
-                <b
-                  style={{
-                    color: "#fbbf24",
-                    fontSize: "11px",
-                  }}
-                >
-                  Prediction Risk: MEDIUM
-                </b>
-              </div>
-
-              <div style={card}>
-                <strong
-                  style={{
-                    color: "#f87171",
-                  }}
-                >
-                  🌡️ Heat Risk Prediction
-                </strong>
-
-                <p style={muted}>
-                  Waiting-area heat
-                  stress risk is
-                  increasing.
-                </p>
-
-                <b
-                  style={{
-                    color: "#f87171",
-                    fontSize: "11px",
-                  }}
-                >
-                  Risk Level: HIGH
-                </b>
-              </div>
-
-              <div style={card}>
-                <strong
-                  style={{
-                    color: "#a78bfa",
-                  }}
-                >
-                  🔧 Predictive
-                  Maintenance
-                </strong>
-
-                <p style={muted}>
-                  Cooling equipment
-                  requires preventive
-                  inspection.
-                </p>
-
-                <b
-                  style={{
-                    color: "#fbbf24",
-                    fontSize: "11px",
-                  }}
-                >
-                  Action Recommended
-                </b>
-              </div>
-            </div>
-          </section>
-
-          {/* WORKFLOW */}
-
-          <section style={section}>
-            <h3
-              style={{
-                color: "#38bdf8",
-                marginTop: 0,
-              }}
-            >
-              🔄 BharatBus AI Response
-              Workflow
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit,minmax(120px,1fr))",
-                gap: "8px",
-              }}
-            >
-              {[
-                [
-                  "📹",
-                  "Detect",
-                  "Camera / IoT",
-                ],
-                [
-                  "🤖",
-                  "Analyze",
-                  "AI Engine",
-                ],
-                [
-                  "📊",
-                  "Predict",
-                  "SAS Analytics",
-                ],
-                [
-                  "🚨",
-                  "Act",
-                  "Authority Alert",
-                ],
-                [
-                  "✅",
-                  "Verify",
-                  "AI Verification",
-                ],
-              ].map(
-                ([
-                  icon,
-                  title,
-                  subtitle,
-                ]) => (
-                  <div
-                    key={title}
-                    style={{
-                      ...card,
-                      textAlign:
-                        "center",
-                      padding:
-                        "15px 8px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize:
-                          "27px",
-                      }}
-                    >
-                      {icon}
-                    </div>
-
-                    <strong>
-                      {title}
-                    </strong>
-
-                    <br />
-
-                    <small style={muted}>
-                      {subtitle}
-                    </small>
-                  </div>
-                )
-              )}
-            </div>
-          </section>
-
-          {/* CROWD ANALYTICS */}
-
-          <section style={section}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent:
-                  "space-between",
-                flexWrap: "wrap",
-                gap: "10px",
-              }}
-            >
-              <h3
-                style={{
-                  color: "#38bdf8",
-                  margin: 0,
-                }}
-              >
-                📊 Passenger Crowd
-                Analytics
-              </h3>
-
-              <span style={muted}>
-                AI + SAS Analytics
-              </span>
-            </div>
-
-            <div
-              style={{
-                width: "100%",
-                height: "300px",
-                marginTop: "15px",
-              }}
-            >
-              <ResponsiveContainer
-                width="100%"
-                height="100%"
-              >
-                <LineChart
-                  data={crowdData}
-                >
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    stroke="#374151"
-                  />
-
-                  <XAxis
-                    dataKey="time"
-                    stroke="#9ca3af"
-                  />
-
-                  <YAxis
-                    stroke="#9ca3af"
-                  />
-
-                  <Tooltip
-                    contentStyle={{
-                      background:
-                        "#1f2937",
-                      border:
-                        "1px solid #374151",
-                      color: "#fff",
-                    }}
-                  />
-
-                  <Line
-                    type="monotone"
-                    dataKey="crowd"
-                    stroke="#38bdf8"
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </section>
-
-          {/* LIVE TELEMETRY */}
-
-          <section style={section}>
-            <h3
-              style={{
-                color: "#38bdf8",
-                marginTop: 0,
-              }}
-            >
-              📡 Live AI Telemetry
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit,minmax(180px,1fr))",
-                gap: "12px",
-              }}
-            >
-              <div style={card}>
-                <span style={muted}>
-                  Total Crowd
-                </span>
-
-                <h2
-                  style={{
-                    margin:
-                      "6px 0",
-                    color:
-                      "#34d399",
-                  }}
-                >
-                  {Number(
-                    telemetry.total_crowd ||
-                      0
-                  ).toLocaleString()}
-                </h2>
-
-                <small style={muted}>
-                  Real-time API data
-                </small>
-              </div>
-
-              <div style={card}>
-                <span style={muted}>
-                  Average Score
-                </span>
-
-                <h2
-                  style={{
-                    margin:
-                      "6px 0",
-                    color:
-                      "#38bdf8",
-                  }}
-                >
-                  {Number(
-                    telemetry.avg_score ||
-                      0
-                  ).toFixed(1)}
-                </h2>
-
-                <small style={muted}>
-                  AI quality score
-                </small>
-              </div>
-
-              <div style={card}>
-                <span style={muted}>
-                  Booked Tickets
-                </span>
-
-                <h2
-                  style={{
-                    margin:
-                      "6px 0",
-                    color:
-                      "#a78bfa",
-                  }}
-                >
-                  {Number(
-                    telemetry.booked_count ||
-                      0
-                  ).toLocaleString()}
-                </h2>
-
-                <small style={muted}>
-                  Backend records
-                </small>
-              </div>
-            </div>
-          </section>
-
-          {/* NATIONAL VISION */}
-
-          <section style={section}>
-            <h3
-              style={{
-                color: "#38bdf8",
-                marginTop: 0,
-              }}
-            >
-              🇮🇳 National Deployment
-              Vision
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit,minmax(220px,1fr))",
-                gap: "12px",
-              }}
-            >
-              <div style={card}>
-                <h3>
-                  🚌 Transport
-                </h3>
-
-                <p style={muted}>
-                  Monitor buses, routes,
-                  crowd levels and
-                  passenger demand.
-                </p>
-              </div>
-
-              <div style={card}>
-                <h3>
-                  🏢 Infrastructure
-                </h3>
-
-                <p style={muted}>
-                  Monitor cleanliness,
-                  toilets, water,
-                  lighting and waiting
-                  areas.
-                </p>
-              </div>
-
-              <div style={card}>
-                <h3>
-                  🧠 AI + SAS
-                </h3>
-
-                <p style={muted}>
-                  Predict problems
-                  before they become
-                  major public-service
-                  failures.
-                </p>
-              </div>
-
-              <div style={card}>
-                <h3>
-                  🚨 Government Action
-                </h3>
-
-                <p style={muted}>
-                  Convert AI alerts
-                  into maintenance
-                  and authority
-                  actions.
-                </p>
-              </div>
-            </div>
-          </section>
-
-          {/* FOOTER */}
-
-          <footer
-            style={{
-              textAlign: "center",
-              color: "#6b7280",
-              fontSize: "10px",
-              padding: "15px",
-            }}
-          >
-            <b>BharatBus AI</b>
-            <br />
-            AI + IoT + SAS Powered
-            Public Transport
-            Infrastructure Intelligence
-            <br />
-            Production backend:
-            {API_BASE}
-            <br />
-            Live telemetry polling
-            enabled.
-          </footer>
         </div>
       )}
     </div>
