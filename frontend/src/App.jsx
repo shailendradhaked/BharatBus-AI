@@ -11,16 +11,6 @@ import {
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
-
 import X402Payment from "./X402Payment";
 
 // ============================================================
@@ -111,20 +101,6 @@ const button = {
   fontWeight: "700",
   color: "#fff",
 };
-
-// ============================================================
-// DEMO CHART DATA
-// ============================================================
-
-const crowdData = [
-  { time: "10 AM", crowd: 400 },
-  { time: "11 AM", crowd: 850 },
-  { time: "12 PM", crowd: 1200 },
-  { time: "1 PM", crowd: 950 },
-  { time: "2 PM", crowd: 1400 },
-  { time: "3 PM", crowd: 1250 },
-  { time: "4 PM", crowd: 1650 },
-];
 
 // ============================================================
 // MAP FOLLOW COMPONENT
