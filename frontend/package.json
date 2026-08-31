@@ -6,30 +6,21 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
   "dependencies": {
     "@perawallet/connect": "^1.4.2",
-    "@x402-avm/core": "^1.0.0",
-    "@x402-avm/react": "^1.0.0",
-    "algosdk": "^2.7.0",
+    "algosdk": "^3.5.2",
     "leaflet": "^1.9.4",
-    "lucide-react": "^1.34.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-leaflet": "^5.0.0",
-    "recharts": "^3.10.1"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-leaflet": "^4.2.1"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^6.1.0",
-    "eslint": "^10.9.0",
-    "eslint-plugin-react-hooks": "^7.1.1",
-    "eslint-plugin-react-refresh": "^0.5.4",
-    "globals": "^17.11.0",
-    "vite": "^8.2.2"
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.1.6"
   }
 }
